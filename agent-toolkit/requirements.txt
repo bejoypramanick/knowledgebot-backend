@@ -2,6 +2,7 @@
 # OpenAI AgentToolkit Requirements
 # ==============================
 openai==1.12.0
+# agents wheel not available for 3.10 — install from source
 agents==1.4.0
 
 # ==============================
@@ -23,7 +24,8 @@ neo4j>=5.24.0
 # ==============================
 # Document Processing
 # ==============================
-docling>=1.2.3
+# Loosened version to avoid dependency conflicts
+docling>=1.2.3,<2.0.0
 
 # --- ML Stack (Pinned for Docker Compatibility) ---
 # These versions avoid NumPy 2.x build errors on GCC < 9.3
