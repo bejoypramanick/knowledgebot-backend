@@ -11,6 +11,10 @@ ENV TORCH_HOME=/tmp/torch_cache
 ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
 ENV DOCLING_ARTIFACTS_PATH=/tmp/docling_artifacts
 
+# Set default embedding configuration (can be overridden by Lambda environment variables)
+ENV EMBEDDING_TYPE=local
+ENV EMBEDDING_MODEL=all-MiniLM-L6-v2
+
 # Install system dependencies
 RUN yum update -y && \
     yum install -y \
@@ -93,8 +97,7 @@ except Exception as e:
 "
 
 # Copy application code
-COPY custom_functions.py ${LAMBDA_TASK_ROOT}/
-COPY agent_configurations.py ${LAMBDA_TASK_ROOT}/
+COPY crud_operations.py ${LAMBDA_TASK_ROOT}/
 COPY lambda_handlers.py ${LAMBDA_TASK_ROOT}/
 
 # Set the CMD to your handler

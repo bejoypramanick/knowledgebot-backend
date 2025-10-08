@@ -24,6 +24,11 @@ try:
     )
     _pinecone_index = pinecone.Index(os.environ.get('PINECONE_INDEX_NAME'))
     
+    # Store Pinecone configuration for validation
+    _pinecone_host = os.environ.get('PINECONE_HOST')
+    _pinecone_dimensions = int(os.environ.get('PINECONE_DIMENSIONS', '1536'))
+    _pinecone_metric = os.environ.get('PINECONE_METRIC', 'cosine')
+    
     # Initialize Neo4j (Required)
     from neo4j import GraphDatabase
     _neo4j_driver = GraphDatabase.driver(
@@ -31,13 +36,25 @@ try:
         auth=(os.environ.get('NEO4J_USER'), os.environ.get('NEO4J_PASSWORD'))
     )
     
-    # Initialize OpenAI embedding model
+    # Initialize embedding model (sentence transformers by default)
     try:
-        import openai
-        _embedding_model = None  # We'll use OpenAI API directly
-        openai.api_key = os.environ.get('OPENAI_API_KEY')
+        embedding_type = os.environ.get('EMBEDDING_TYPE', 'local').lower()
+        
+        if embedding_type == 'local':
+            from sentence_transformers import SentenceTransformer
+            model_name = os.environ.get('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
+            _embedding_model = SentenceTransformer(model_name)
+            _embedding_type = 'local'
+            logger.info(f"Using local sentence transformers model: {model_name}")
+        else:
+            import openai
+            _embedding_model = None  # We'll use OpenAI API directly
+            openai.api_key = os.environ.get('OPENAI_API_KEY')
+            _embedding_type = 'openai'
+            logger.info("Using OpenAI embedding API")
     except Exception as e:
-        logger.warning(f"OpenAI not available: {e}")
+        logger.warning(f"Embedding model not available: {e}")
+        _embedding_type = 'none'
 
 except Exception as e:
     logger.error(f"Error initializing services: {e}")
@@ -125,7 +142,10 @@ def search_pinecone_crud(query_vector: List[float], limit: int = 10, filter_dict
             'matches': processed_matches,
             'namespace': results.namespace or namespace or '',
             'query_vector_length': len(query_vector),
-            'total_matches': len(processed_matches)
+            'total_matches': len(processed_matches),
+            'pinecone_dimensions': _pinecone_dimensions,
+            'pinecone_metric': _pinecone_metric,
+            'pinecone_host': _pinecone_host
         }
     except Exception as e:
         return {
@@ -332,7 +352,7 @@ def delete_dynamodb_crud(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]
 
 def generate_embedding_crud(text: str) -> Dict[str, Any]:
     """
-    CRUD: Generate embedding vector for text using OpenAI text-embedding-3-small
+    CRUD: Generate embedding vector for text (local or OpenAI)
     
     Args:
         text: Text to embed
@@ -341,23 +361,57 @@ def generate_embedding_crud(text: str) -> Dict[str, Any]:
         Raw embedding vector or error
     """
     try:
-        import openai
-        
-        # Generate embedding using OpenAI API
-        response = openai.embeddings.create(
-            model="text-embedding-3-small",
-            input=text
-        )
-        
-        embedding = response.data[0].embedding
-        
-        return {
-            'success': True,
-            'embedding': embedding,
-            'text_length': len(text),
-            'embedding_dimension': len(embedding),
-            'model': 'text-embedding-3-small'
-        }
+        if _embedding_type == 'local' and _embedding_model:
+            # Use local sentence transformers model
+            embedding = _embedding_model.encode(text)
+            model_name = os.environ.get('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
+            
+            # Validate embedding dimensions match Pinecone configuration
+            if len(embedding) != _pinecone_dimensions:
+                logger.warning(f"Embedding dimension mismatch: expected {_pinecone_dimensions}, got {len(embedding)}")
+            
+            return {
+                'success': True,
+                'embedding': embedding.tolist(),
+                'text_length': len(text),
+                'embedding_dimension': len(embedding),
+                'model': model_name,
+                'type': 'local',
+                'pinecone_dimensions': _pinecone_dimensions,
+                'pinecone_metric': _pinecone_metric
+            }
+            
+        elif _embedding_type == 'openai':
+            # Use OpenAI API
+            import openai
+            
+            response = openai.embeddings.create(
+                model="text-embedding-3-small",
+                input=text
+            )
+            
+            embedding = response.data[0].embedding
+            
+            # Validate embedding dimensions match Pinecone configuration
+            if len(embedding) != _pinecone_dimensions:
+                logger.warning(f"Embedding dimension mismatch: expected {_pinecone_dimensions}, got {len(embedding)}")
+            
+            return {
+                'success': True,
+                'embedding': embedding,
+                'text_length': len(text),
+                'embedding_dimension': len(embedding),
+                'model': 'text-embedding-3-small',
+                'type': 'openai',
+                'pinecone_dimensions': _pinecone_dimensions,
+                'pinecone_metric': _pinecone_metric
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'No embedding model available'
+            }
+            
     except Exception as e:
         return {
             'success': False,
