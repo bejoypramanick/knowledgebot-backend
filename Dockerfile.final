@@ -1,0 +1,79 @@
+FROM public.ecr.aws/lambda/python:3.11
+
+# Install system dependencies
+RUN yum update -y && \
+    yum install -y \
+    gcc \
+    gcc-c++ \
+    make \
+    cmake \
+    git \
+    wget \
+    curl \
+    unzip \
+    libffi-devel \
+    openssl-devel \
+    libjpeg-devel \
+    libpng-devel \
+    libtiff-devel \
+    freetype-devel \
+    lcms2-devel \
+    libwebp-devel \
+    tcl-devel \
+    tk-devel \
+    libxml2-devel \
+    libxslt-devel \
+    zlib-devel \
+    bzip2-devel \
+    readline-devel \
+    sqlite-devel \
+    xz-devel \
+    expat-devel \
+    gdbm-devel \
+    ncurses-devel \
+    libuuid-devel \
+    libffi-devel \
+    python3-devel \
+    && yum clean all
+
+# Install core Python dependencies
+RUN pip install --upgrade pip==24.0 setuptools wheel
+
+# Install all dependencies from requirements.txt
+COPY agent-toolkit/requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-download models
+RUN python -c "\
+import os; \
+os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'; \
+os.environ['HF_HOME'] = '/tmp/huggingface_cache'; \
+os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'; \
+os.environ['TORCH_HOME'] = '/tmp/torch_cache'; \
+os.environ['SENTENCE_TRANSFORMERS_HOME'] = '/tmp/sentence_transformers_cache'; \
+try: \
+    from sentence_transformers import SentenceTransformer; \
+    model = SentenceTransformer('all-MiniLM-L6-v2'); \
+    print('Sentence transformer model downloaded'); \
+except Exception as e: \
+    print(f'Sentence transformer download failed: {e}'); \
+try: \
+    from docling.document_converter import DocumentConverter; \
+    converter = DocumentConverter(); \
+    print('Docling models downloaded'); \
+except Exception as e: \
+    print(f'Docling model download failed: {e}'); \
+"
+
+# Set environment variables
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/huggingface_cache
+ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
+ENV TORCH_HOME=/tmp/torch_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
+
+# Copy application code
+COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
+
+# Set the CMD to your handler
+CMD ["lambda_handlers.lambda_handler_knowledge_chat"]

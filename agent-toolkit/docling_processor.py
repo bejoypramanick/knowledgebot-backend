@@ -1,6 +1,10 @@
 """
 Docling Document Processor for Production-Level Document Processing
 Provides hierarchical semantic chunking with fallback to Docling's default chunking
+
+Copyright (c) 2024 Bejoy Pramanick
+All rights reserved. Commercial use prohibited without written permission.
+Contact: bejoy.pramanick@globistaan.com for licensing inquiries.
 """
 
 import os
@@ -17,7 +21,6 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.document import Document
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
-from docling.backend.python_magic_backend import PythonMagicBackend
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -103,7 +106,6 @@ class DoclingProcessor:
                 },
                 backends=[
                     PyPdfiumDocumentBackend(),
-                    PythonMagicBackend(),
                 ]
             )
             

@@ -61,49 +61,23 @@ httpx==0.25.0
 orjson==3.9.10
 
 # ==============================
-# File Processing
+# Document Processing (Docling handles all of this internally)
 # ==============================
-python-magic>=0.4.27
-# Note: python-magic-bin is only for Windows users
-# Uncomment below if you're on Windows
-# python-magic-bin>=0.4.14
+# Docling includes: PDF, Word, Excel, PowerPoint, HTML, image processing
+# No additional document processing libraries needed
 
 # ==============================
-# Image Processing (for Docling)
+# Caching (removed - not used in current implementation)
 # ==============================
-Pillow>=10.4.0
-opencv-python>=4.10.0.84
+# redis>=5.1.0
 
 # ==============================
-# PDF Processing
+# Environment and Configuration (removed - not used in current implementation)
 # ==============================
-PyPDF2>=3.0.1
-pdfplumber>=0.11.0
+# python-decouple>=3.8
 
 # ==============================
-# Office Document Processing
+# Testing (removed for production deployment)
 # ==============================
-python-docx>=1.1.0
-openpyxl>=3.1.5
-
-# ==============================
-# Text Processing
-# ==============================
-nltk>=3.9.1
-spacy>=3.7.6
-
-# ==============================
-# Caching
-# ==============================
-redis>=5.1.0
-
-# ==============================
-# Environment and Configuration
-# ==============================
-python-decouple>=3.8
-
-# ==============================
-# Testing (optional)
-# ==============================
-pytest>=8.3.2
-pytest-asyncio>=0.23.8
+# pytest>=8.3.2
+# pytest-asyncio>=0.23.8

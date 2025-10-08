@@ -1,6 +1,10 @@
 """
 Production RAG Operations
 Complete RAG pipeline for document ingestion and retrieval with Docling integration
+
+Copyright (c) 2024 Bejoy Pramanick
+All rights reserved. Commercial use prohibited without written permission.
+Contact: bejoy.pramanick@globistaan.com for licensing inquiries.
 """
 
 import json

@@ -1,6 +1,10 @@
 """
 CRUD Tools Only - Pure Data Operations
 All business logic and formatting handled by AgentBuilder model
+
+Copyright (c) 2024 Bejoy Pramanick
+All rights reserved. Commercial use prohibited without written permission.
+Contact: bejoy.pramanick@globistaan.com for licensing inquiries.
 """
 
 import json

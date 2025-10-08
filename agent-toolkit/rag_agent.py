@@ -1,6 +1,10 @@
 """
 RAG Agent with Production RAG Tools
 Complete RAG pipeline with Pinecone, Neo4j, and DynamoDB
+
+Copyright (c) 2024 Bejoy Pramanick
+All rights reserved. Commercial use prohibited without written permission.
+Contact: bejoy.pramanick@globistaan.com for licensing inquiries.
 """
 
 from agents import function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig
