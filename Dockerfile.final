@@ -1,6 +1,6 @@
 # Dockerfile.final
 # Complete application: Python 3.12 Lambda base with full ML stack and Docling
-FROM public.ecr.aws/lambda/python:3.12
+FROM public.ecr.aws/lambda/python:3.10
 
 LABEL maintainer="KnowledgeBot Team"
 ENV LANG=C.UTF-8
