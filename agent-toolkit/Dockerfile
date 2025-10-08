@@ -63,37 +63,24 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download and cache models
-RUN python -c "
-import os
-os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
-os.environ['HF_HOME'] = '/tmp/huggingface_cache'
-os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'
-os.environ['TORCH_HOME'] = '/tmp/torch_cache'
-os.environ['SENTENCE_TRANSFORMERS_HOME'] = '/tmp/sentence_transformers_cache'
-
-# Pre-download sentence transformer model
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('all-MiniLM-L6-v2')
-print('Sentence transformer model downloaded and cached')
-
-# Pre-download Docling models
-try:
-    from docling.document_converter import DocumentConverter
-    from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
-    
-    converter = DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfPipelineOptions(
-                do_ocr=True,
-                do_table_structure=True,
-                table_structure_options={'do_cell_matching': True}
-            )
-        }
-    )
-    print('Docling models downloaded and cached')
-except Exception as e:
-    print(f'Docling model download failed: {e}')
+RUN python -c "\
+import os; \
+os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'; \
+os.environ['HF_HOME'] = '/tmp/huggingface_cache'; \
+os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'; \
+os.environ['TORCH_HOME'] = '/tmp/torch_cache'; \
+os.environ['SENTENCE_TRANSFORMERS_HOME'] = '/tmp/sentence_transformers_cache'; \
+from sentence_transformers import SentenceTransformer; \
+model = SentenceTransformer('all-MiniLM-L6-v2'); \
+print('Sentence transformer model downloaded and cached'); \
+try: \
+    from docling.document_converter import DocumentConverter; \
+    from docling.datamodel.base_models import InputFormat; \
+    from docling.datamodel.pipeline_options import PdfPipelineOptions; \
+    converter = DocumentConverter(format_options={InputFormat.PDF: PdfPipelineOptions(do_ocr=True, do_table_structure=True, table_structure_options={'do_cell_matching': True})}); \
+    print('Docling models downloaded and cached'); \
+except Exception as e: \
+    print(f'Docling model download failed: {e}'); \
 "
 
 # Copy application code
