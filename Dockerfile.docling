@@ -10,8 +10,8 @@ ENV PIP_NO_CACHE_DIR=1
 
 # Install minimal system dependencies for Docling
 # Docling handles most processing through Python packages (pypdfium2, EasyOCR, etc.)
-RUN yum update -y && \
-    yum install -y \
+RUN dnf update -y && \
+    dnf install -y \
     gcc \
     gcc-c++ \
     make \
@@ -26,7 +26,7 @@ RUN yum update -y && \
     gdbm-devel \
     ncurses-devel \
     python3-devel \
-    && yum clean all
+    && dnf clean all
 
 # Upgrade pip and install core dependencies
 RUN python -m pip install --upgrade pip setuptools wheel
