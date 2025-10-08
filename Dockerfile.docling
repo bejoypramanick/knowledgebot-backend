@@ -96,13 +96,15 @@ RUN pip install --no-cache-dir \
     pinecone-client>=3.1.0 \
     neo4j>=5.24.0
 
-# Remaining dependencies
+# Remaining dependencies - allow agents to build from source
 RUN pip install --no-cache-dir \
     openai==1.12.0 \
-    agents==1.4.0 \
     httpx==0.25.0 \
     orjson==3.9.10 \
     structlog==23.2.0
+
+# Install agents separately to allow source build
+RUN pip install --no-cache-dir --no-binary agents agents==1.4.0
 
 # Set environment variables before model download
 ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
