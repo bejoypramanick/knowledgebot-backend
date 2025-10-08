@@ -12,8 +12,5 @@ RUN pip install --no-cache-dir requests
 # Test import
 RUN python -c "import requests; print('Requests works!')"
 
-# Copy minimal code
-COPY agent-toolkit/lambda_handlers.py ${LAMBDA_TASK_ROOT}/
-
-# Set the CMD
-CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
+# Don't copy any files, just test basic functionality
+RUN echo "Basic Docker build successful!"

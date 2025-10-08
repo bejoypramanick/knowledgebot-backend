@@ -1,0 +1,20 @@
+name: Test No Copy Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-no-copy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test no copy Docker build
+      run: |
+        echo "Testing no copy Docker build..."
+        docker build -f Dockerfile.no-copy -t test-no-copy .
+        echo "No copy build successful!"
