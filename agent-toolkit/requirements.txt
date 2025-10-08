@@ -1,86 +1,40 @@
 # ==============================
-# OpenAI AgentToolkit Requirements
+# Core Dependencies (Others pulled transitively)
 # ==============================
+
+# OpenAI and Agents
 openai==1.12.0
-# agents wheel not available for 3.10 — install from source
-agents==1.4.0
+agents==1.4.0  # Requires source build
 
-# ==============================
 # AWS SDK
-# ==============================
 boto3>=1.35.0
-botocore>=1.35.0
 
-# ==============================
-# Vector Database (Required)
-# ==============================
+# Databases
 pinecone-client>=3.1.0
-
-# ==============================
-# Graph Database (Required)
-# ==============================
 neo4j>=5.24.0
 
-# ==============================
 # Document Processing
-# ==============================
-# Loosened version to avoid docling-parse compatibility issues
-docling>=1.3.0,<1.7.0
+docling==1.3.0
 
-# --- ML Stack (Updated for Python 3.13 compatibility) ---
-# Updated versions support Python 3.13 and Amazon Linux 2023
-torch>=2.3.0
-transformers>=4.40.0
-sentence-transformers>=2.7.0
-numpy>=1.26.4
-tensorflow>=2.16.0
+# ML Stack (Pinned for Docker Compatibility)
+# These versions avoid NumPy 2.x build errors on GCC < 9.3
+torch==2.1.0
+transformers==4.36.0
+sentence-transformers==2.2.2
+numpy==1.26.4
+tensorflow==2.20.0
 
-# ==============================
 # Data Processing
-# ==============================
 pandas>=2.2.2
 
-# ==============================
-# Utilities
-# ==============================
-python-dotenv>=1.0.1
-pydantic>=2.9.0
-typing-extensions>=4.12.2
+# Explicit pins (may be needed for compatibility)
+httpx==0.25.0        # OpenAI requirement
+orjson==3.9.10       # Performance optimization
+structlog==23.2.0    # Logging
 
 # ==============================
-# Logging and Monitoring
+# Notes
 # ==============================
-structlog==23.2.0
-
-# ==============================
-# HTTP and API
-# ==============================
-requests>=2.32.3
-httpx==0.25.0
-
-# ==============================
-# JSON and Data
-# ==============================
-orjson==3.9.10
-
-# ==============================
-# Document Processing (Docling handles all of this internally)
-# ==============================
-# Docling includes: PDF, Word, Excel, PowerPoint, HTML, image processing
-# No additional document processing libraries needed
-
-# ==============================
-# Caching (removed - not used in current implementation)
-# ==============================
-# redis>=5.1.0
-
-# ==============================
-# Environment and Configuration (removed - not used in current implementation)
-# ==============================
-# python-decouple>=3.8
-
-# ==============================
-# Testing (removed for production deployment)
-# ==============================
-# pytest>=8.3.2
-# pytest-asyncio>=0.23.8
+# - Most dependencies are pulled transitively by pip
+# - Only explicit pins where version conflicts might occur
+# - Docling includes: PDF, Word, Excel, PowerPoint, HTML, image processing

@@ -1,0 +1,21 @@
+FROM public.ecr.aws/lambda/python:3.10
+
+# Install basic dependencies only
+RUN pip install --upgrade pip setuptools wheel
+
+# Test basic Python packages
+RUN pip install --no-cache-dir \
+    numpy==1.26.4 \
+    requests==2.31.0
+
+# Test agents package
+RUN pip install --no-cache-dir --no-binary agents agents==1.4.0
+
+# Test basic functionality
+RUN python -c "import numpy; import requests; import agents; print('All packages imported successfully')"
+
+# Copy minimal code
+COPY agent-toolkit/lambda_handlers.py ${LAMBDA_TASK_ROOT}/
+
+# Set the CMD
+CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
