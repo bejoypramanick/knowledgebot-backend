@@ -67,3 +67,4 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 
 # Set the CMD to your main handler
 CMD ["lambda_handlers", "lambda_handler_knowledge_chat"]
+# Trigger full deployment
