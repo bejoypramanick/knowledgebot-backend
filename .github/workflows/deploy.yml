@@ -268,22 +268,44 @@ jobs:
       run: |
         echo "🚀 Deploying Lambda functions..."
 
-        # Check which images were built
+        # Check which images are available (use latest if current commit not found)
         FINAL_BUILT=false
         DOCLING_BUILT=false
+        FINAL_IMAGE_TAG=""
+        DOCLING_IMAGE_TAG=""
 
+        # Check for final image (current commit first, then latest)
         if aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --image-ids imageTag=final-$IMAGE_TAG --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
           FINAL_BUILT=true
+          FINAL_IMAGE_TAG="final-$IMAGE_TAG"
           echo "✅ Final image found: final-$IMAGE_TAG"
         else
-          echo "⏭️ Final image not found: final-$IMAGE_TAG"
+          # Look for latest final image
+          LATEST_FINAL=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageDetails[?contains(imageTags, `final`)].imageTags[0]' --output text | head -1)
+          if [ "$LATEST_FINAL" != "None" ] && [ -n "$LATEST_FINAL" ]; then
+            FINAL_BUILT=true
+            FINAL_IMAGE_TAG="$LATEST_FINAL"
+            echo "✅ Using latest final image: $LATEST_FINAL"
+          else
+            echo "⏭️ No final image found"
+          fi
         fi
 
+        # Check for docling image (current commit first, then latest)
         if aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --image-ids imageTag=docling-$IMAGE_TAG --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
           DOCLING_BUILT=true
+          DOCLING_IMAGE_TAG="docling-$IMAGE_TAG"
           echo "✅ Docling image found: docling-$IMAGE_TAG"
         else
-          echo "⏭️ Docling image not found: docling-$IMAGE_TAG"
+          # Look for latest docling image
+          LATEST_DOCLING=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageDetails[?contains(imageTags, `docling`)].imageTags[0]' --output text | head -1)
+          if [ "$LATEST_DOCLING" != "None" ] && [ -n "$LATEST_DOCLING" ]; then
+            DOCLING_BUILT=true
+            DOCLING_IMAGE_TAG="$LATEST_DOCLING"
+            echo "✅ Using latest docling image: $LATEST_DOCLING"
+          else
+            echo "⏭️ No docling image found"
+          fi
         fi
 
         # Deploy knowledgebot-chat if final image was built
@@ -292,14 +314,14 @@ jobs:
             echo "📝 Updating existing knowledgebot-chat function..."
             aws lambda update-function-code \
               --function-name knowledgebot-chat \
-              --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
+              --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$FINAL_IMAGE_TAG \
               --region ${{ env.AWS_REGION }}
           else
             echo "🆕 Creating knowledgebot-chat function..."
             aws lambda create-function \
               --function-name knowledgebot-chat \
               --package-type Image \
-              --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
+              --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$FINAL_IMAGE_TAG \
               --architectures arm64 \
               --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
               --region ${{ env.AWS_REGION }} \
@@ -316,14 +338,14 @@ jobs:
             echo "📝 Updating existing knowledgebot-document-ingestion function..."
             aws lambda update-function-code \
               --function-name knowledgebot-document-ingestion \
-              --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
+              --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$DOCLING_IMAGE_TAG \
               --region ${{ env.AWS_REGION }}
           else
             echo "🆕 Creating knowledgebot-document-ingestion function..."
             aws lambda create-function \
               --function-name knowledgebot-document-ingestion \
               --package-type Image \
-              --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
+              --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$DOCLING_IMAGE_TAG \
               --architectures arm64 \
               --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
               --region ${{ env.AWS_REGION }} \
