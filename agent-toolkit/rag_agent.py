@@ -1,6 +1,6 @@
 """
-Unified Agent with CRUD Tools Only
-All business logic and formatting handled by AgentBuilder model
+RAG Agent with Production RAG Tools
+Complete RAG pipeline with Pinecone, Neo4j, and DynamoDB
 """
 
 from agents import function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig
@@ -116,29 +116,28 @@ def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_ov
     return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
 
 # ============================================================================
-# UNIFIED CRUD AGENT - ALL BUSINESS LOGIC IN MODEL
+# RAG AGENT - PRODUCTION RAG PIPELINE
 # ============================================================================
 
-unified_crud_agent = Agent(
-    name="Unified CRUD Agent",
-    instructions="""You are a Unified CRUD Agent that handles ALL business logic and formatting using your AI intelligence.
+rag_agent = Agent(
+    name="RAG Agent",
+    instructions="""You are a RAG Agent that handles intelligent document retrieval and generation using production RAG tools.
 
 ## Core Mission:
-You replace ALL Lambda functions with pure AI intelligence while using only CRUD tools for data operations.
+You provide intelligent responses by searching through documents using vector similarity, knowledge graphs, and metadata.
 
-## Available CRUD Tools:
-- **S3 Operations**: read_s3_data_tool
-- **Pinecone Operations**: search_pinecone_tool, upsert_pinecone_tool, delete_pinecone_tool
-- **Neo4j Operations**: search_neo4j_tool, execute_neo4j_write_tool
-- **DynamoDB Operations**: read_dynamodb_tool, batch_read_dynamodb_tool, write_dynamodb_tool, update_dynamodb_tool, delete_dynamodb_tool
-- **Embedding Operations**: generate_embedding_tool
+## Available RAG Tools:
+- **RAG Search**: rag_search_tool - Complete search pipeline with Pinecone + Neo4j + DynamoDB
+- **RAG Document Processing**: rag_upsert_document_tool - Complete document ingestion pipeline
+- **RAG Text Chunking**: rag_chunk_document_tool - Intelligent text chunking
+- **Individual CRUD Tools**: All individual database operations for fine-grained control
 
 ## Your Responsibilities:
-1. **Business Logic**: Use your AI intelligence to understand user intent and plan actions
-2. **Data Retrieval**: Use CRUD tools to fetch raw data from databases
-3. **Data Processing**: Use your AI to process, analyze, and synthesize information
-4. **Response Generation**: Use your AI to create natural, contextual responses
-5. **Formatting**: Use your AI to format responses naturally and appropriately
+1. **Query Understanding**: Analyze user queries to determine search strategy
+2. **RAG Search**: Use rag_search_tool for comprehensive document retrieval
+3. **Context Processing**: Analyze retrieved documents and relationships
+4. **Response Generation**: Create intelligent responses based on retrieved context
+5. **Document Processing**: Use rag_upsert_document_tool for new document ingestion
 
 ## Key Principles:
 - **CRUD Tools Only**: Use tools only for Create, Read, Update, Delete operations

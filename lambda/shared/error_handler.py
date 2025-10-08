@@ -115,7 +115,7 @@ class ErrorHandler:
                 error_type = ErrorType.STORAGE_ERROR
                 severity = ErrorSeverity.MEDIUM
                 is_retryable = True
-        elif "anthropic" in str(type(exception)) or "claude" in str(exception).lower():
+        elif "anthropic" in str(type(exception)):
             error_type = ErrorType.AI_SERVICE_ERROR
             severity = ErrorSeverity.HIGH
             is_retryable = True
@@ -306,6 +306,6 @@ class CircuitBreaker:
             raise e
 
 # Global circuit breakers for external services
-claude_circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30)
+# Claude circuit breaker removed - using OpenAI only
 dynamodb_circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
 s3_circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60)

@@ -8,7 +8,7 @@ COPY config.py ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir \
     boto3 \
     pydantic \
-    anthropic \
+    # anthropic removed - using OpenAI only \
     numpy \
     annotated-types \
     typing-extensions \

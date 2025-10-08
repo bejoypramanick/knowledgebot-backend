@@ -9,8 +9,8 @@ import asyncio
 from typing import Dict, Any
 import logging
 
-# Import our unified AI agent
-from unified_ai_agent import run_unified_crud_processing, CRUDAgentInput
+# Import our RAG agent
+from rag_agent import run_rag_processing, RAGAgentInput
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
