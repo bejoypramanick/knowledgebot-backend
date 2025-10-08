@@ -67,7 +67,12 @@ Everything is automated through GitHub Actions! The workflow handles:
 
 ### **Manual Setup** (First time only)
 1. **Configure GitHub Secrets:**
-   - `AWS_ROLE_ARN` - Your AWS IAM role for GitHub Actions
+   - Go to **Settings** → **Secrets and variables** → **Actions**
+   - Add these secrets:
+     - `AWS_ACCESS_KEY_ID` - Your AWS Access Key ID
+     - `AWS_SECRET_ACCESS_KEY` - Your AWS Secret Access Key
+     - `AWS_REGION` - AWS region (optional, defaults to `ap-south-1`)
+     - `OPENAI_API_KEY` - Your OpenAI API key
    
 2. **Trigger Setup:**
    - Go to Actions tab → "Deploy KnowledgeBot Backend"
