@@ -69,6 +69,6 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
 # Set the CMD to your main handler
-CMD ["python3", "test_handler.py"]
+CMD ["test_handler", "lambda_handler"]
 # Trigger full deployment
 # Trigger fresh build with current code
