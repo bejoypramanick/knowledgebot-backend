@@ -16,34 +16,20 @@ logger = logging.getLogger(__name__)
 try:
     s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'ap-south-1'))
     dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION', 'ap-south-1'))
-    PINECONE_AVAILABLE = False
-    NEO4J_AVAILABLE = False
-    _pinecone_index = None
-    _neo4j_driver = None
-    _embedding_model = None
+    # Initialize Pinecone (Required)
+    import pinecone
+    pinecone.init(
+        api_key=os.environ.get('PINECONE_API_KEY'),
+        environment=os.environ.get('PINECONE_ENVIRONMENT')
+    )
+    _pinecone_index = pinecone.Index(os.environ.get('PINECONE_INDEX_NAME'))
     
-    # Try to initialize Pinecone
-    try:
-        import pinecone
-        pinecone.init(
-            api_key=os.environ.get('PINECONE_API_KEY'),
-            environment=os.environ.get('PINECONE_ENVIRONMENT')
-        )
-        _pinecone_index = pinecone.Index(os.environ.get('PINECONE_INDEX_NAME'))
-        PINECONE_AVAILABLE = True
-    except Exception as e:
-        logger.warning(f"Pinecone not available: {e}")
-    
-    # Try to initialize Neo4j
-    try:
-        from neo4j import GraphDatabase
-        _neo4j_driver = GraphDatabase.driver(
-            os.environ.get('NEO4J_URI'),
-            auth=(os.environ.get('NEO4J_USER'), os.environ.get('NEO4J_PASSWORD'))
-        )
-        NEO4J_AVAILABLE = True
-    except Exception as e:
-        logger.warning(f"Neo4j not available: {e}")
+    # Initialize Neo4j (Required)
+    from neo4j import GraphDatabase
+    _neo4j_driver = GraphDatabase.driver(
+        os.environ.get('NEO4J_URI'),
+        auth=(os.environ.get('NEO4J_USER'), os.environ.get('NEO4J_PASSWORD'))
+    )
     
     # Try to initialize embedding model
     try:
@@ -54,13 +40,7 @@ try:
 
 except Exception as e:
     logger.error(f"Error initializing services: {e}")
-    s3_client = None
-    dynamodb = None
-    PINECONE_AVAILABLE = False
-    NEO4J_AVAILABLE = False
-    _pinecone_index = None
-    _neo4j_driver = None
-    _embedding_model = None
+    raise e  # Fail fast if required services can't be initialized
 
 # ============================================================================
 # PURE CRUD TOOLS - NO BUSINESS LOGIC
@@ -110,11 +90,6 @@ def search_pinecone_crud(query_vector: List[float], limit: int = 10, filter_dict
         Raw Pinecone search results with RAG context
     """
     try:
-        if not PINECONE_AVAILABLE or not _pinecone_index:
-            return {
-                'success': False,
-                'error': 'Pinecone not available'
-            }
         
         # Build query parameters
         query_params = {
@@ -169,11 +144,6 @@ def search_neo4j_crud(cypher_query: str, parameters: Dict[str, Any] = None) -> D
         Raw Neo4j query results
     """
     try:
-        if not NEO4J_AVAILABLE or not _neo4j_driver:
-            return {
-                'success': False,
-                'error': 'Neo4j not available'
-            }
         
         with _neo4j_driver.session() as session:
             result = session.run(cypher_query, parameters or {})
@@ -402,11 +372,6 @@ def upsert_pinecone_crud(vectors: List[Dict[str, Any]], namespace: str = None) -
         Upsert result or error
     """
     try:
-        if not PINECONE_AVAILABLE or not _pinecone_index:
-            return {
-                'success': False,
-                'error': 'Pinecone not available'
-            }
         
         response = _pinecone_index.upsert(
             vectors=vectors,
@@ -436,11 +401,6 @@ def delete_pinecone_crud(ids: List[str], namespace: str = None) -> Dict[str, Any
         Delete result or error
     """
     try:
-        if not PINECONE_AVAILABLE or not _pinecone_index:
-            return {
-                'success': False,
-                'error': 'Pinecone not available'
-            }
         
         response = _pinecone_index.delete(
             ids=ids,
@@ -470,11 +430,6 @@ def execute_neo4j_write_crud(cypher_query: str, parameters: Dict[str, Any] = Non
         Write result or error
     """
     try:
-        if not NEO4J_AVAILABLE or not _neo4j_driver:
-            return {
-                'success': False,
-                'error': 'Neo4j not available'
-            }
         
         with _neo4j_driver.session() as session:
             result = session.run(cypher_query, parameters or {})

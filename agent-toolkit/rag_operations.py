@@ -51,9 +51,9 @@ def rag_search_crud(query: str, limit: int = 5, filter_dict: Dict[str, Any] = No
         if not search_result['success']:
             return search_result
         
-        # Step 3: Get additional context from Neo4j if available
+        # Step 3: Get additional context from Neo4j
         neo4j_context = []
-        if NEO4J_AVAILABLE and search_result['matches']:
+        if search_result['matches']:
             # Extract document IDs from Pinecone results
             doc_ids = [match['document_id'] for match in search_result['matches'] if match.get('document_id')]
             
@@ -192,7 +192,7 @@ def rag_upsert_document_crud(document_id: str, chunks: List[Dict[str, Any]], met
             results['errors'].append(f"DynamoDB write: {dynamodb_result['error']}")
         
         # Step 4: Create Neo4j relationships
-        if NEO4J_AVAILABLE and vectors_to_upsert:
+        if vectors_to_upsert:
             try:
                 # Create document node
                 create_doc_query = """
