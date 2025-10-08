@@ -24,14 +24,17 @@ neo4j>=5.24.0
 # Document Processing
 # ==============================
 docling>=1.2.3
-transformers>=4.44.2
-sentence-transformers>=3.0.1
-torch>=2.3.0
+
+# --- ML Stack (Pinned for Docker Compatibility) ---
+# These versions avoid NumPy 2.x build errors on GCC < 9.3
+torch==2.1.0
+transformers==4.36.0
+sentence-transformers==2.2.2
+numpy==1.26.4
 
 # ==============================
 # Data Processing
 # ==============================
-numpy>=1.26.0
 pandas>=2.2.2
 
 # ==============================
