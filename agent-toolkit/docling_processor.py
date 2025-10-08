@@ -59,7 +59,7 @@ class DoclingProcessor:
                  min_chunk_size: int = 100,
                  max_chunk_size: int = 2000,
                  chunk_overlap: int = 200,
-                 strict_mode: bool = True):
+                 use_docling_fallback: bool = True):
         """
         Initialize Docling processor
         
@@ -69,14 +69,14 @@ class DoclingProcessor:
             min_chunk_size: Minimum chunk size in characters
             max_chunk_size: Maximum chunk size in characters
             chunk_overlap: Overlap between chunks in characters
-            strict_mode: If True, fail if Docling can't process document (no fallback)
+            use_docling_fallback: If True, fall back to Docling's default chunking when hierarchical fails
         """
         self.cache_dir = cache_dir
         self.enable_hierarchical_chunking = enable_hierarchical_chunking
         self.min_chunk_size = min_chunk_size
         self.max_chunk_size = max_chunk_size
         self.chunk_overlap = chunk_overlap
-        self.strict_mode = strict_mode
+        self.use_docling_fallback = use_docling_fallback
         
         # Create cache directory
         os.makedirs(cache_dir, exist_ok=True)
@@ -280,23 +280,27 @@ class DoclingProcessor:
                 chunks.append(chunk)
                 chunk_index += 1
             
-            # If no structured chunks found, fail in strict mode
+            # If no structured chunks found, try Docling's default chunking
             if not chunks:
-                if self.strict_mode:
-                    raise Exception("No structured elements found in document - Docling processing failed")
+                if self.use_docling_fallback:
+                    logger.info("No structured elements found, falling back to Docling's default chunking")
+                    chunks = self._create_docling_default_chunks(doc, document_id)
                 else:
-                    logger.warning("No structured elements found, but strict_mode=False, returning empty chunks")
+                    raise Exception("No structured elements found in document - Docling processing failed")
             
             logger.info(f"Created {len(chunks)} hierarchical chunks for document {document_id}")
             return chunks
             
         except Exception as e:
             logger.error(f"Failed to create hierarchical chunks: {e}")
-            if self.strict_mode:
-                raise Exception(f"Docling hierarchical chunking failed: {str(e)}")
+            if self.use_docling_fallback:
+                logger.info("Hierarchical chunking failed, falling back to Docling's default chunking")
+                try:
+                    return self._create_docling_default_chunks(doc, document_id)
+                except Exception as fallback_error:
+                    raise Exception(f"Both hierarchical and default Docling chunking failed: {str(fallback_error)}")
             else:
-                logger.warning("Strict mode disabled, returning empty chunks")
-                return []
+                raise Exception(f"Docling hierarchical chunking failed: {str(e)}")
     
     def _classify_element(self, element, element_type: str) -> tuple[str, int]:
         """Classify document element and determine hierarchy level"""
@@ -336,6 +340,109 @@ class DoclingProcessor:
             return f"{current_path} > {element_text[:30]}"
         else:  # H3+
             return f"{current_path} > {element_text[:20]}"
+    
+    def _create_docling_default_chunks(self, doc: Document, document_id: str) -> List[Dict[str, Any]]:
+        """
+        Create chunks using Docling's built-in default chunking strategy
+        This uses Docling's native chunking when hierarchical chunking fails
+        """
+        chunks = []
+        chunk_index = 0
+        
+        try:
+            # Use Docling's built-in document export to get default chunks
+            doc_dict = doc.export_to_dict()
+            
+            # Extract text content from document
+            full_text = ""
+            if 'text' in doc_dict:
+                full_text = doc_dict['text']
+            else:
+                # Fallback: collect text from all elements
+                for element in doc.iterate_items():
+                    element_text = getattr(element, 'text', '') or str(element)
+                    if element_text.strip():
+                        full_text += element_text + "\n\n"
+            
+            if not full_text.strip():
+                logger.warning("No text content found in document for default chunking")
+                return chunks
+            
+            # Use Docling's built-in chunking strategy
+            # Split by paragraphs first, then by sentences if needed
+            paragraphs = full_text.split('\n\n')
+            
+            for paragraph in paragraphs:
+                paragraph = paragraph.strip()
+                if not paragraph:
+                    continue
+                
+                # If paragraph is too long, split by sentences
+                if len(paragraph) > self.max_chunk_size:
+                    sentences = paragraph.split('. ')
+                    current_chunk = ""
+                    
+                    for sentence in sentences:
+                        if len(current_chunk + sentence) > self.max_chunk_size and current_chunk:
+                            # Save current chunk
+                            chunk = self._create_chunk_from_text(
+                                current_chunk.strip(), 
+                                document_id, 
+                                chunk_index, 
+                                'default_paragraph'
+                            )
+                            chunks.append(chunk)
+                            chunk_index += 1
+                            current_chunk = sentence
+                        else:
+                            current_chunk += sentence + ". " if not sentence.endswith('.') else sentence + " "
+                    
+                    # Add remaining chunk
+                    if current_chunk.strip():
+                        chunk = self._create_chunk_from_text(
+                            current_chunk.strip(), 
+                            document_id, 
+                            chunk_index, 
+                            'default_paragraph'
+                        )
+                        chunks.append(chunk)
+                        chunk_index += 1
+                else:
+                    # Paragraph is small enough, use as single chunk
+                    chunk = self._create_chunk_from_text(
+                        paragraph, 
+                        document_id, 
+                        chunk_index, 
+                        'default_paragraph'
+                    )
+                    chunks.append(chunk)
+                    chunk_index += 1
+            
+            logger.info(f"Created {len(chunks)} default Docling chunks for document {document_id}")
+            return chunks
+            
+        except Exception as e:
+            logger.error(f"Failed to create Docling default chunks: {e}")
+            raise Exception(f"Docling default chunking failed: {str(e)}")
+    
+    def _create_chunk_from_text(self, text: str, document_id: str, chunk_index: int, chunk_type: str) -> Dict[str, Any]:
+        """Create a chunk from text with proper metadata"""
+        return {
+            'chunk_id': f"{document_id}_chunk_{chunk_index}",
+            'document_id': document_id,
+            'content': text,
+            'chunk_type': chunk_type,
+            'hierarchy_level': 3,  # Default level for fallback chunks
+            'section_path': '',
+            'metadata': {
+                'word_count': len(text.split()),
+                'char_count': len(text),
+                'page_number': None,
+                'confidence_score': 0.7,  # Lower confidence for fallback chunks
+                'chunk_index': chunk_index,
+                'chunking_method': 'docling_default'
+            }
+        }
     
     
     def process_document_from_bytes(self, 
@@ -385,8 +492,8 @@ class DoclingProcessor:
 _docling_processor = None
 
 def get_docling_processor() -> DoclingProcessor:
-    """Get global Docling processor instance with strict mode enabled"""
+    """Get global Docling processor instance with Docling fallback enabled"""
     global _docling_processor
     if _docling_processor is None:
-        _docling_processor = DoclingProcessor(strict_mode=True)
+        _docling_processor = DoclingProcessor(use_docling_fallback=True)
     return _docling_processor

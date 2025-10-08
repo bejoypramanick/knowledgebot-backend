@@ -320,7 +320,7 @@ For advanced document processing with hierarchical semantic chunking:
 4. **Document Types**: Docling supports PDF, Word, PowerPoint, HTML, and more
 5. **Chunk Types**: Creates title, heading, paragraph, list, table, figure chunks with hierarchy levels
 6. **Section Structure**: Maintains document structure with section paths and hierarchy levels
-7. **Strict Mode**: Docling processing will fail if it cannot properly parse the document structure (no fallback)
+7. **Docling Fallback**: If hierarchical chunking fails, falls back to Docling's default chunking strategy
 
 ## Docling Chunk Types and Hierarchy:
 - **Title** (Level 0): Document title
@@ -331,7 +331,7 @@ For advanced document processing with hierarchical semantic chunking:
 - **List Item** (Level 2): Bullet points and numbered lists
 - **Table** (Level 3): Tabular data
 - **Figure** (Level 3): Images, charts, diagrams
-- **Default** (Level 3): Fallback for unstructured content
+- **Default Paragraph** (Level 3): Docling's default chunking fallback
 
 ## Response Guidelines:
 - Always provide comprehensive, helpful responses

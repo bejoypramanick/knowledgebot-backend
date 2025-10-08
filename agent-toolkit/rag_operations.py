@@ -319,7 +319,7 @@ def rag_process_document_with_docling_crud(document_path: str, document_id: str 
                 'success': False,
                 'error': f"Docling processing failed: {result.error_message}",
                 'document_id': result.document_id,
-                'docling_strict_mode': True
+                'docling_fallback_used': False
             }
         
         # Convert Docling chunks to RAG format
@@ -373,7 +373,7 @@ def rag_process_document_with_docling_crud(document_path: str, document_id: str 
             'success': False,
             'error': f"Docling processing failed: {str(e)}",
             'document_id': document_id,
-            'docling_strict_mode': True
+            'docling_fallback_used': False
         }
 
 def rag_process_document_from_bytes_crud(document_bytes: bytes, filename: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
@@ -401,7 +401,7 @@ def rag_process_document_from_bytes_crud(document_bytes: bytes, filename: str, d
                 'success': False,
                 'error': f"Docling processing failed: {result.error_message}",
                 'document_id': result.document_id,
-                'docling_strict_mode': True
+                'docling_fallback_used': False
             }
         
         # Convert Docling chunks to RAG format
@@ -455,7 +455,7 @@ def rag_process_document_from_bytes_crud(document_bytes: bytes, filename: str, d
             'success': False,
             'error': f"Docling processing failed: {str(e)}",
             'document_id': document_id,
-            'docling_strict_mode': True
+            'docling_fallback_used': False
         }
 
 def rag_search_with_hierarchical_context_crud(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
