@@ -1,0 +1,24 @@
+name: Test Basic Environment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-basic:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test basic commands
+      run: |
+        echo "Testing basic environment..."
+        echo "Current directory: $(pwd)"
+        echo "Files in directory:"
+        ls -la
+        echo "Docker version:"
+        docker --version
+        echo "Basic test successful!"

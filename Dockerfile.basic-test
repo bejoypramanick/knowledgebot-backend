@@ -1,0 +1,6 @@
+FROM public.ecr.aws/lambda/python:3.10
+
+# Just test basic functionality
+RUN echo "Docker build started"
+RUN python --version
+RUN echo "Docker build completed successfully"
