@@ -238,7 +238,7 @@ async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[st
         
         # Run the unified CRUD agent
         crud_result = await Runner.run(
-            unified_crud_agent,
+            rag_agent,
             input=conversation_history,
             run_config=RunConfig(trace_metadata={
                 "__trace_source__": "agent-builder",
