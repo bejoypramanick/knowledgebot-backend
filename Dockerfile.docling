@@ -61,6 +61,7 @@ RUN pip install --no-cache-dir \
     torch==2.1.0 \
     transformers==4.36.0 \
     sentence-transformers==2.2.2 \
+    tensorflow==2.20.0 \
     --no-build-isolation
 
 # AWS and database clients
