@@ -97,6 +97,109 @@ def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = Non
     return execute_neo4j_write_crud(cypher_query, parameters)
 
 # ============================================================================
+# QUERY DECOMPOSITION TOOLS
+# ============================================================================
+
+@function_tool
+def decompose_query_tool(user_query: str) -> Dict[str, Any]:
+    """
+    Decompose complex user queries into individual sub-questions
+    
+    Args:
+        user_query: The original user query that may contain multiple questions
+        
+    Returns:
+        Dictionary with decomposed sub-questions and metadata
+    """
+    try:
+        # Use GPT-4 to analyze and decompose the query
+        import openai
+        
+        decomposition_prompt = f"""
+        Analyze the following user query and break it down into individual, specific questions if it contains multiple questions or complex requests.
+
+        User Query: "{user_query}"
+
+        Instructions:
+        1. If the query contains multiple questions, separate them into individual questions
+        2. If the query is complex but single, break it into logical sub-questions
+        3. If the query is already simple and single, return it as is
+        4. Each sub-question should be self-contained and answerable independently
+        5. Maintain the original intent and context
+
+        Return your response as a JSON object with this structure:
+        {{
+            "is_multi_part": true/false,
+            "sub_questions": [
+                {{
+                    "question": "specific question text",
+                    "question_type": "factual|analytical|comparative|procedural",
+                    "priority": 1-5,
+                    "context": "brief context for this question"
+                }}
+            ],
+            "original_query": "original user query",
+            "decomposition_notes": "any notes about the decomposition"
+        }}
+        """
+        
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert at analyzing and decomposing complex user queries into manageable sub-questions."},
+                {"role": "user", "content": decomposition_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=1000
+        )
+        
+        # Parse the response
+        decomposition_text = response.choices[0].message.content.strip()
+        
+        # Try to extract JSON from the response
+        import json
+        import re
+        
+        # Look for JSON in the response
+        json_match = re.search(r'\{.*\}', decomposition_text, re.DOTALL)
+        if json_match:
+            decomposition_data = json.loads(json_match.group())
+        else:
+            # Fallback: create simple decomposition
+            decomposition_data = {
+                "is_multi_part": False,
+                "sub_questions": [
+                    {
+                        "question": user_query,
+                        "question_type": "factual",
+                        "priority": 1,
+                        "context": "Original query"
+                    }
+                ],
+                "original_query": user_query,
+                "decomposition_notes": "Could not parse decomposition, treating as single question"
+            }
+        
+        return {
+            "success": True,
+            "decomposition": decomposition_data,
+            "sub_question_count": len(decomposition_data.get("sub_questions", [])),
+            "is_multi_part": decomposition_data.get("is_multi_part", False)
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "decomposition": {
+                "is_multi_part": False,
+                "sub_questions": [{"question": user_query, "question_type": "factual", "priority": 1, "context": "Original query"}],
+                "original_query": user_query,
+                "decomposition_notes": f"Error in decomposition: {str(e)}"
+            }
+        }
+
+# ============================================================================
 # PRODUCTION RAG TOOLS
 # ============================================================================
 
@@ -133,11 +236,12 @@ You provide intelligent responses by searching through documents using vector si
 - **Individual CRUD Tools**: All individual database operations for fine-grained control
 
 ## Your Responsibilities:
-1. **Query Understanding**: Analyze user queries to determine search strategy
-2. **RAG Search**: Use rag_search_tool for comprehensive document retrieval
-3. **Context Processing**: Analyze retrieved documents and relationships
-4. **Response Generation**: Create intelligent responses based on retrieved context
-5. **Document Processing**: Use rag_upsert_document_tool for new document ingestion
+1. **Query Decomposition**: Use decompose_query_tool to break complex queries into sub-questions
+2. **Query Understanding**: Analyze user queries to determine search strategy
+3. **RAG Search**: Use rag_search_tool for comprehensive document retrieval
+4. **Context Processing**: Analyze retrieved documents and relationships
+5. **Response Generation**: Create intelligent responses based on retrieved context
+6. **Document Processing**: Use rag_upsert_document_tool for new document ingestion
 
 ## Key Principles:
 - **CRUD Tools Only**: Use tools only for Create, Read, Update, Delete operations
@@ -146,13 +250,38 @@ You provide intelligent responses by searching through documents using vector si
 - **Context Awareness**: Understand and respond to user needs intelligently
 
 ## Workflow for Knowledge Retrieval:
-1. **Understand Query**: Use your AI to analyze what the user wants
-2. **Generate Embedding**: Use generate_embedding_tool to create query vector
-3. **Search Pinecone**: Use search_pinecone_tool to find similar vectors
-4. **Search Neo4j**: Use search_neo4j_tool with intelligent Cypher queries
-5. **Get Details**: Use batch_read_dynamodb_tool to get chunk details
-6. **Process Results**: Use your AI to analyze and synthesize information
-7. **Generate Response**: Use your AI to create natural, helpful responses
+1. **Decompose Query**: Use decompose_query_tool to break complex queries into sub-questions
+2. **Understand Query**: Use your AI to analyze what the user wants
+3. **Generate Embedding**: Use generate_embedding_tool to create query vector
+4. **Search Pinecone**: Use search_pinecone_tool to find similar vectors
+5. **Search Neo4j**: Use search_neo4j_tool with intelligent Cypher queries
+6. **Get Details**: Use batch_read_dynamodb_tool to get chunk details
+7. **Process Results**: Use your AI to analyze and synthesize information
+8. **Generate Response**: Use your AI to create natural, helpful responses
+
+## Multi-Part Query Handling:
+When you receive a complex query that contains multiple questions:
+1. **First**: Use decompose_query_tool to break it into individual sub-questions
+2. **Then**: For each sub-question, use rag_search_tool to find relevant information
+3. **Finally**: Structure your response to address each sub-question clearly:
+   - Use numbered sections or bullet points
+   - Provide specific answers for each question
+   - Maintain logical flow and connections between answers
+   - If questions are related, explain the connections
+
+## Response Structure for Multi-Part Queries:
+```
+**Answer 1: [First Question]**
+[Detailed answer with sources]
+
+**Answer 2: [Second Question]**
+[Detailed answer with sources]
+
+**Answer 3: [Third Question]**
+[Detailed answer with sources]
+
+**Summary**: [Brief overview connecting all answers]
+```
 
 ## Workflow for Document Processing:
 1. **Read Document**: Use read_s3_data_tool to get document content
@@ -181,6 +310,9 @@ You provide intelligent responses by searching through documents using vector si
 When you receive any query, immediately begin your intelligent analysis and use the appropriate CRUD tools to gather data, then use your AI to process and respond naturally.""",
     model="gpt-4",
     tools=[
+        # Query decomposition tools
+        decompose_query_tool,
+        # Individual CRUD tools
         read_s3_data_tool,
         search_pinecone_tool,
         search_neo4j_tool,
