@@ -48,7 +48,6 @@ RUN yum update -y && \
     ncurses-devel \
     libuuid-devel \
     libffi-devel \
-    python3-devel \
     && yum clean all
 
 # Create cache directories
@@ -61,10 +60,7 @@ RUN mkdir -p /tmp/transformers_cache \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt ${LAMBDA_TASK_ROOT}/
-
-# Upgrade pip and install dependencies with better error handling
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir --upgrade -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download and cache models
 RUN python -c "\
@@ -77,6 +73,14 @@ os.environ['SENTENCE_TRANSFORMERS_HOME'] = '/tmp/sentence_transformers_cache'; \
 from sentence_transformers import SentenceTransformer; \
 model = SentenceTransformer('all-MiniLM-L6-v2'); \
 print('Sentence transformer model downloaded and cached'); \
+try: \
+    from docling.document_converter import DocumentConverter; \
+    from docling.datamodel.base_models import InputFormat; \
+    from docling.datamodel.pipeline_options import PdfPipelineOptions; \
+    converter = DocumentConverter(format_options={InputFormat.PDF: PdfPipelineOptions(do_ocr=True, do_table_structure=True, table_structure_options={'do_cell_matching': True})}); \
+    print('Docling models downloaded and cached'); \
+except Exception as e: \
+    print(f'Docling model download failed: {e}'); \
 "
 
 # Copy application code
