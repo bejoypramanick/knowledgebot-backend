@@ -1,12 +1,10 @@
-FROM public.ecr.aws/lambda/python:3.10
+FROM public.ecr.aws/lambda/python:3.13
 
-# Install system dependencies including GCC 10
+# Install system dependencies for Amazon Linux 2023
 RUN yum update -y && \
     yum install -y \
     gcc \
     gcc-c++ \
-    gcc10 \
-    gcc10-c++ \
     make \
     cmake \
     git \
@@ -37,14 +35,6 @@ RUN yum update -y && \
     python3-devel \
     && yum clean all
 
-# Create symlinks for GCC 10 compilers
-RUN ln -sf /usr/bin/gcc10-gcc /usr/bin/gcc10 && \
-    ln -sf /usr/bin/gcc10-g++ /usr/bin/g++10
-
-# Set environment variables to use GCC 10 for C++20 support
-ENV CC=/usr/bin/gcc10
-ENV CXX=/usr/bin/g++10
-
 # Create cache directories
 RUN mkdir -p /tmp/transformers_cache \
     /tmp/huggingface_cache \
@@ -56,16 +46,16 @@ RUN mkdir -p /tmp/transformers_cache \
 RUN pip install --upgrade pip==24.0 setuptools wheel
 
 # Pre-install NumPy to prevent upgrades during ML package installation
-RUN pip install --no-cache-dir numpy==1.26.4
+RUN pip install --no-cache-dir numpy>=1.26.4
 
 # Install ML stack first - allow source builds if needed
 RUN pip install --no-cache-dir \
-    torch==2.1.0 \
-    transformers==4.36.0 \
-    sentence-transformers==2.2.2
+    torch>=2.3.0 \
+    transformers>=4.40.0 \
+    sentence-transformers>=2.7.0
 
 # Install TensorFlow separately
-RUN pip install --no-cache-dir tensorflow==2.20.0
+RUN pip install --no-cache-dir tensorflow>=2.16.0
 
 # Copy and install remaining dependencies from requirements.txt
 # Allow agents to build from source if no wheel available
