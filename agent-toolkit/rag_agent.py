@@ -29,7 +29,10 @@ from crud_operations import (
 from rag_operations import (
     rag_search_crud,
     rag_upsert_document_crud,
-    rag_chunk_document_crud
+    rag_chunk_document_crud,
+    rag_process_document_with_docling_crud,
+    rag_process_document_from_bytes_crud,
+    rag_search_with_hierarchical_context_crud
 )
 
 # ============================================================================
@@ -218,6 +221,21 @@ def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_ov
     """RAG: Chunk document text for processing"""
     return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
 
+@function_tool
+def rag_process_document_with_docling_tool(document_path: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
+    """RAG: Process document using Docling with hierarchical semantic chunking"""
+    return rag_process_document_with_docling_crud(document_path, document_id, namespace)
+
+@function_tool
+def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
+    """RAG: Process document from bytes using Docling (useful for S3 documents)"""
+    return rag_process_document_from_bytes_crud(document_bytes, filename, document_id, namespace)
+
+@function_tool
+def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
+    """RAG: Enhanced RAG search with hierarchical context from Docling chunks"""
+    return rag_search_with_hierarchical_context_crud(query, limit, filter_dict, namespace)
+
 # ============================================================================
 # RAG AGENT - PRODUCTION RAG PIPELINE
 # ============================================================================
@@ -233,6 +251,9 @@ You provide intelligent responses by searching through documents using vector si
 - **RAG Search**: rag_search_tool - Complete search pipeline with Pinecone + Neo4j + DynamoDB
 - **RAG Document Processing**: rag_upsert_document_tool - Complete document ingestion pipeline
 - **RAG Text Chunking**: rag_chunk_document_tool - Intelligent text chunking
+- **Docling Document Processing**: rag_process_document_with_docling_tool - Advanced document processing with hierarchical semantic chunking
+- **Docling Bytes Processing**: rag_process_document_from_bytes_tool - Process documents from bytes (S3 compatible)
+- **Hierarchical RAG Search**: rag_search_with_hierarchical_context_tool - Enhanced search with document structure context
 - **Individual CRUD Tools**: All individual database operations for fine-grained control
 
 ## Your Responsibilities:
@@ -291,6 +312,26 @@ When you receive a complex query that contains multiple questions:
 5. **Store Metadata**: Use write_dynamodb_tool to store chunk metadata
 6. **Create Relationships**: Use execute_neo4j_write_tool to create knowledge graph
 
+## Docling-Powered Document Processing:
+For advanced document processing with hierarchical semantic chunking:
+1. **Process with Docling**: Use rag_process_document_with_docling_tool for file-based documents
+2. **Process from Bytes**: Use rag_process_document_from_bytes_tool for S3/streaming documents
+3. **Hierarchical Search**: Use rag_search_with_hierarchical_context_tool for structure-aware search
+4. **Document Types**: Docling supports PDF, Word, PowerPoint, HTML, and more
+5. **Chunk Types**: Creates title, heading, paragraph, list, table, figure chunks with hierarchy levels
+6. **Section Structure**: Maintains document structure with section paths and hierarchy levels
+
+## Docling Chunk Types and Hierarchy:
+- **Title** (Level 0): Document title
+- **Heading H1** (Level 1): Main sections
+- **Heading H2** (Level 2): Subsections
+- **Heading H3+** (Level 3+): Sub-subsections
+- **Paragraph** (Level 2): Regular text content
+- **List Item** (Level 2): Bullet points and numbered lists
+- **Table** (Level 3): Tabular data
+- **Figure** (Level 3): Images, charts, diagrams
+- **Default** (Level 3): Fallback for unstructured content
+
 ## Response Guidelines:
 - Always provide comprehensive, helpful responses
 - Use natural language that feels conversational
@@ -328,7 +369,11 @@ When you receive any query, immediately begin your intelligent analysis and use 
         # Production RAG tools
         rag_search_tool,
         rag_upsert_document_tool,
-        rag_chunk_document_tool
+        rag_chunk_document_tool,
+        # Docling-powered RAG tools
+        rag_process_document_with_docling_tool,
+        rag_process_document_from_bytes_tool,
+        rag_search_with_hierarchical_context_tool
     ],
     model_settings=ModelSettings(
         temperature=0.1,

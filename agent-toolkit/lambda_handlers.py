@@ -110,12 +110,17 @@ async def knowledge_document_ingestion_handler_async(event: Dict[str, Any], cont
         bucket = s3_info.get('bucket', {}).get('name', '')
         key = s3_info.get('object', {}).get('key', '')
         
-        # Create knowledge agent input for document processing
+        # Create knowledge agent input for document processing with Docling
         knowledge_input = CRUDAgentInput(
-            user_query=f"Process document: s3://{bucket}/{key}",
+            user_query=f"Process document with Docling hierarchical chunking: s3://{bucket}/{key}",
             conversation_history=[],
             conversation_id=f"doc_processing_{hash(key)}",
-            user_preferences={"processing_type": "document_ingestion"}
+            user_preferences={
+                "processing_type": "document_ingestion",
+                "use_docling": True,
+                "hierarchical_chunking": True,
+                "document_source": f"s3://{bucket}/{key}"
+            }
         )
         
         # Run the knowledge processing
@@ -129,10 +134,14 @@ async def knowledge_document_ingestion_handler_async(event: Dict[str, Any], cont
                 "s3_bucket": bucket,
                 "s3_key": key,
                 "processing_time": result.get("processing_time", 0),
-                "workflow_type": "knowledge_processing",
+                "workflow_type": "docling_document_processing",
                 "agent_used": "knowledge_agent",
-                "tools_used": "crud_only",
-                "business_logic": "ai_handled"
+                "tools_used": "docling_hierarchical_chunking",
+                "business_logic": "ai_handled",
+                "docling_enabled": True,
+                "hierarchical_chunking": True,
+                "chunk_types": result.get("chunk_types", []),
+                "total_chunks": result.get("total_chunks", 0)
             })
         }
         
