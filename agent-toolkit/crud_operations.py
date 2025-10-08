@@ -96,16 +96,18 @@ def read_s3_data_crud(bucket: str, key: str) -> Dict[str, Any]:
             'key': key
         }
 
-def search_pinecone_crud(query_vector: List[float], limit: int = 10) -> Dict[str, Any]:
+def search_pinecone_crud(query_vector: List[float], limit: int = 10, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
     """
-    CRUD: Search Pinecone vector database
+    CRUD: Search Pinecone vector database with production RAG features
     
     Args:
         query_vector: Vector representation of query
         limit: Maximum number of results
+        filter_dict: Metadata filter for Pinecone
+        namespace: Pinecone namespace
         
     Returns:
-        Raw Pinecone search results
+        Raw Pinecone search results with RAG context
     """
     try:
         if not PINECONE_AVAILABLE or not _pinecone_index:
@@ -114,17 +116,40 @@ def search_pinecone_crud(query_vector: List[float], limit: int = 10) -> Dict[str
                 'error': 'Pinecone not available'
             }
         
-        results = _pinecone_index.query(
-            vector=query_vector,
-            top_k=limit,
-            include_metadata=True
-        )
+        # Build query parameters
+        query_params = {
+            'vector': query_vector,
+            'top_k': limit,
+            'include_metadata': True,
+            'include_values': False  # Don't return vectors for performance
+        }
+        
+        if filter_dict:
+            query_params['filter'] = filter_dict
+        if namespace:
+            query_params['namespace'] = namespace
+        
+        results = _pinecone_index.query(**query_params)
+        
+        # Process results for RAG
+        processed_matches = []
+        for match in results.matches:
+            processed_matches.append({
+                'id': match.id,
+                'score': match.score,
+                'metadata': match.metadata or {},
+                'text': match.metadata.get('text', '') if match.metadata else '',
+                'source': match.metadata.get('source', '') if match.metadata else '',
+                'chunk_id': match.metadata.get('chunk_id', '') if match.metadata else '',
+                'document_id': match.metadata.get('document_id', '') if match.metadata else ''
+            })
         
         return {
             'success': True,
-            'matches': results.matches,
-            'namespace': results.namespace,
-            'query_vector_length': len(query_vector)
+            'matches': processed_matches,
+            'namespace': results.namespace or namespace or '',
+            'query_vector_length': len(query_vector),
+            'total_matches': len(processed_matches)
         }
     except Exception as e:
         return {

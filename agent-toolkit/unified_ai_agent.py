@@ -11,7 +11,7 @@ import time
 import asyncio
 from datetime import datetime
 
-# Import only CRUD tools
+# Import CRUD tools and RAG operations
 from crud_operations import (
     read_s3_data_crud,
     search_pinecone_crud,
@@ -25,6 +25,11 @@ from crud_operations import (
     upsert_pinecone_crud,
     delete_pinecone_crud,
     execute_neo4j_write_crud
+)
+from rag_operations import (
+    rag_search_crud,
+    rag_upsert_document_crud,
+    rag_chunk_document_crud
 )
 
 # ============================================================================
@@ -90,6 +95,25 @@ def delete_pinecone_tool(ids: List[str], namespace: str = None) -> Dict[str, Any
 def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
     """CRUD: Execute write Cypher query in Neo4j"""
     return execute_neo4j_write_crud(cypher_query, parameters)
+
+# ============================================================================
+# PRODUCTION RAG TOOLS
+# ============================================================================
+
+@function_tool
+def rag_search_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
+    """RAG: Complete search pipeline with Pinecone + Neo4j + DynamoDB"""
+    return rag_search_crud(query, limit, filter_dict, namespace)
+
+@function_tool
+def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, Any]], metadata: Dict[str, Any], namespace: str = None) -> Dict[str, Any]:
+    """RAG: Complete document ingestion pipeline"""
+    return rag_upsert_document_crud(document_id, chunks, metadata, namespace)
+
+@function_tool
+def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict[str, Any]]:
+    """RAG: Chunk document text for processing"""
+    return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
 
 # ============================================================================
 # UNIFIED CRUD AGENT - ALL BUSINESS LOGIC IN MODEL
@@ -169,7 +193,11 @@ When you receive any query, immediately begin your intelligent analysis and use 
         generate_embedding_tool,
         upsert_pinecone_tool,
         delete_pinecone_tool,
-        execute_neo4j_write_tool
+        execute_neo4j_write_tool,
+        # Production RAG tools
+        rag_search_tool,
+        rag_upsert_document_tool,
+        rag_chunk_document_tool
     ],
     model_settings=ModelSettings(
         temperature=0.1,

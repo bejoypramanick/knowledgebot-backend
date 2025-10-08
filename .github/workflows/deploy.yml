@@ -245,7 +245,10 @@ jobs:
             "PINECONE_INDEX_NAME": "${{ secrets.PINECONE_INDEX_NAME }}",
             "NEO4J_URI": "${{ secrets.NEO4J_URI }}",
             "NEO4J_USER": "${{ secrets.NEO4J_USER }}",
-            "NEO4J_PASSWORD": "${{ secrets.NEO4J_PASSWORD }}"
+            "NEO4J_PASSWORD": "${{ secrets.NEO4J_PASSWORD }}",
+            "SENTENCE_TRANSFORMERS_HOME": "/tmp/sentence_transformers_cache",
+            "TRANSFORMERS_CACHE": "/tmp/transformers_cache",
+            "HF_HOME": "/tmp/huggingface_cache"
           }
         }
         EOF
