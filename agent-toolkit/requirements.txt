@@ -18,7 +18,7 @@ pinecone-client>=3.1.0
 neo4j>=5.24.0
 
 # Document Processing (Docling - advanced PDF processing, OCR, table detection)
-# Required system packages: tesseract, tesseract-devel, tesseract-langpack-eng, poppler-utils
+# Self-contained: includes pypdfium2 (PDF), EasyOCR (OCR), and ML models (table detection)
 # Installation: pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
 # Features used: PyPdfium backend, OCR for scanned PDFs, table structure detection, hierarchical chunking
 docling>=2.25.0
