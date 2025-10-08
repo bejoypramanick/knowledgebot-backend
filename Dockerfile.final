@@ -47,7 +47,7 @@ RUN python -m pip install --no-cache-dir \
 
 # Install data processing and ML stack
 RUN python -m pip install --no-cache-dir \
-    numpy>=1.26.0,<2.0.0 \
+    "numpy>=1.26.0,<2.0.0" \
     pandas>=2.2.0
 
 # Install ML libraries with CPU-only PyTorch for Lambda
