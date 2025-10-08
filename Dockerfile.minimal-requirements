@@ -1,0 +1,26 @@
+FROM public.ecr.aws/lambda/python:3.10
+
+# Install basic system dependencies
+RUN yum update -y && \
+    yum install -y \
+    gcc \
+    gcc-c++ \
+    make \
+    python3-devel \
+    && yum clean all
+
+# Install basic Python packages
+RUN pip install --upgrade pip setuptools wheel
+
+# Install minimal requirements
+COPY agent-toolkit/requirements-minimal.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r requirements-minimal.txt
+
+# Test basic functionality
+RUN python -c "import numpy; import requests; import boto3; import openai; print('All minimal packages work')"
+
+# Copy minimal code
+COPY agent-toolkit/lambda_handlers.py ${LAMBDA_TASK_ROOT}/
+
+# Set the CMD
+CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
