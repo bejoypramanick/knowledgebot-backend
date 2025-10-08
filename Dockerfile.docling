@@ -8,8 +8,8 @@ ENV LC_ALL=C.UTF-8
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_CACHE_DIR=1
 
-# Install minimal system dependencies for document processing
-# Based on Docling documentation - most processing is handled by Python packages
+# Install system dependencies for advanced document processing (Docling)
+# Required for PDF processing, OCR, and table structure detection
 RUN yum update -y && \
     yum install -y \
     gcc \
@@ -26,12 +26,24 @@ RUN yum update -y && \
     gdbm-devel \
     ncurses-devel \
     python3-devel \
-    # Only essential image processing for basic Docling functionality
+    # Essential image processing for Docling PDF/OCR functionality
     libjpeg-devel \
     libpng-devel \
     libtiff-devel \
     freetype-devel \
+    lcms2-devel \
+    libwebp-devel \
+    # PDF processing libraries
+    poppler-utils \
+    # OCR capabilities (EasyOCR is default, but system OCR available)
+    tesseract \
+    tesseract-devel \
+    tesseract-langpack-eng \
+    leptonica-devel \
     && yum clean all
+
+# Set Tesseract data path for OCR fallback
+ENV TESSDATA_PREFIX=/usr/share/tesseract/tessdata/
 
 # Upgrade pip and install core dependencies
 RUN python -m pip install --upgrade pip setuptools wheel
