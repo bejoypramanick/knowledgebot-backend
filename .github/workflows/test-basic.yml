@@ -1,8 +1,6 @@
 name: Test Basic Environment
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
