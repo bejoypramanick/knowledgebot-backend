@@ -356,6 +356,45 @@ jobs:
           echo "⏭️ Skipping knowledgebot-document-ingestion deployment (no docling image)"
         fi
 
+        # Wait for Lambda functions to be ready before setting environment variables
+        echo "⏳ Waiting for Lambda functions to be ready..."
+        
+        # Wait for knowledgebot-chat to be ready
+        if [ "$FINAL_BUILT" = true ]; then
+          echo "⏳ Waiting for knowledgebot-chat to be ready..."
+          while true; do
+            STATUS=$(aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "NotFound")
+            if [ "$STATUS" = "Successful" ]; then
+              echo "✅ knowledgebot-chat is ready"
+              break
+            elif [ "$STATUS" = "Failed" ]; then
+              echo "❌ knowledgebot-chat update failed"
+              break
+            else
+              echo "⏳ knowledgebot-chat status: $STATUS, waiting..."
+              sleep 10
+            fi
+          done
+        fi
+
+        # Wait for knowledgebot-document-ingestion to be ready
+        if [ "$DOCLING_BUILT" = true ]; then
+          echo "⏳ Waiting for knowledgebot-document-ingestion to be ready..."
+          while true; do
+            STATUS=$(aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "NotFound")
+            if [ "$STATUS" = "Successful" ]; then
+              echo "✅ knowledgebot-document-ingestion is ready"
+              break
+            elif [ "$STATUS" = "Failed" ]; then
+              echo "❌ knowledgebot-document-ingestion update failed"
+              break
+            else
+              echo "⏳ knowledgebot-document-ingestion status: $STATUS, waiting..."
+              sleep 10
+            fi
+          done
+        fi
+
         # Set environment variables for deployed functions
         echo "🔧 Configuring environment variables..."
 
