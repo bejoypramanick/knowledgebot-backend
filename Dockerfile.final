@@ -1,6 +1,6 @@
 FROM public.ecr.aws/lambda/python:3.10
 
-# Install system dependencies
+# Install system dependencies including GCC 10
 RUN yum update -y && \
     yum install -y \
     gcc \
@@ -37,6 +37,10 @@ RUN yum update -y && \
     python3-devel \
     && yum clean all
 
+# Create symlinks for GCC 10 compilers
+RUN ln -sf /usr/bin/gcc10-gcc /usr/bin/gcc10 && \
+    ln -sf /usr/bin/gcc10-g++ /usr/bin/g++10
+
 # Set environment variables to use GCC 10 for C++20 support
 ENV CC=/usr/bin/gcc10
 ENV CXX=/usr/bin/g++10
@@ -54,12 +58,18 @@ RUN pip install --upgrade pip==24.0 setuptools wheel
 # Pre-install NumPy to prevent upgrades during ML package installation
 RUN pip install --no-cache-dir numpy==1.26.4
 
-# Install ML stack first (these are pinned in requirements.txt)
-RUN pip install --no-cache-dir \
+# Install ML stack first using prebuilt wheels where possible
+RUN pip install --no-cache-dir --only-binary :all: \
     torch==2.1.0 \
     transformers==4.36.0 \
-    sentence-transformers==2.2.2 \
-    tensorflow==2.20.0
+    sentence-transformers==2.2.2 || \
+    pip install --no-cache-dir \
+    torch==2.1.0 \
+    transformers==4.36.0 \
+    sentence-transformers==2.2.2
+
+# Install TensorFlow separately
+RUN pip install --no-cache-dir tensorflow==2.20.0
 
 # Copy and install remaining dependencies from requirements.txt
 # Exclude ML packages already installed to avoid conflicts

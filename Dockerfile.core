@@ -1,6 +1,6 @@
 FROM public.ecr.aws/lambda/python:3.10
 
-# Install system dependencies
+# Install system dependencies including GCC 10
 RUN yum update -y && \
     yum install -y \
     gcc \
@@ -37,6 +37,10 @@ RUN yum update -y && \
     python3-devel \
     && yum clean all
 
+# Create symlinks for GCC 10 compilers
+RUN ln -sf /usr/bin/gcc10-gcc /usr/bin/gcc10 && \
+    ln -sf /usr/bin/gcc10-g++ /usr/bin/g++10
+
 # Set environment variables to use GCC 10 for C++20 support
 ENV CC=/usr/bin/gcc10
 ENV CXX=/usr/bin/g++10
@@ -71,15 +75,22 @@ RUN pip install --no-cache-dir \
     pinecone-client>=3.1.0 \
     neo4j>=5.24.0
 
-# Install sentencepiece as precompiled wheel first
-RUN pip install --no-cache-dir sentencepiece==0.1.99
+# Install sentencepiece - try prebuilt wheel first, fallback to build
+RUN pip install --no-cache-dir sentencepiece==0.1.99 || \
+    pip install --no-cache-dir --no-binary sentencepiece sentencepiece==0.1.99
 
-# ML dependencies – pinned versions from requirements.txt
-RUN pip install --no-cache-dir \
+# ML dependencies – use prebuilt wheels where possible
+RUN pip install --no-cache-dir --only-binary :all: \
     torch==2.1.0 \
     transformers==4.36.0 \
-    sentence-transformers==2.2.2 \
-    tensorflow==2.20.0
+    sentence-transformers==2.2.2 || \
+    pip install --no-cache-dir \
+    torch==2.1.0 \
+    transformers==4.36.0 \
+    sentence-transformers==2.2.2
+
+# Install TensorFlow separately
+RUN pip install --no-cache-dir tensorflow==2.20.0
 
 # Remaining dependencies
 RUN pip install --no-cache-dir \
