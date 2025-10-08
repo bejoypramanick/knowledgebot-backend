@@ -1,78 +1,53 @@
-FROM public.ecr.aws/lambda/python:3.10
+# Dockerfile.final
+# Unified final image (core + docling). Python 3.12 Lambda base.
+FROM public.ecr.aws/lambda/python:3.12
 
-# Install minimal system dependencies for Amazon Linux 2023 (mandatory only)
-RUN yum update -y && \
-    yum install -y \
-    gcc \
-    gcc-c++ \
-    make \
-    libffi-devel \
-    openssl-devel \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    sqlite-devel \
-    xz-devel \
-    expat-devel \
-    gdbm-devel \
-    ncurses-devel \
-    python3-devel \
-    && yum clean all
+LABEL maintainer="you@example.com"
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1
 
-# Create cache directories
-RUN mkdir -p /tmp/transformers_cache \
-    /tmp/huggingface_cache \
-    /tmp/huggingface_datasets_cache \
-    /tmp/torch_cache \
-    /tmp/sentence_transformers_cache
+# -------- System packages --------
+RUN yum -y update && \
+    yum -y install \
+      gcc \
+      gcc-c++ \
+      make \
+      git \
+      wget \
+      unzip \
+      libjpeg-turbo-devel \
+      freetype-devel \
+      zlib-devel \
+      openssl-devel \
+      libffi-devel \
+      poppler-utils \
+      ghostscript \
+      ImageMagick \
+      tesseract \
+      tesseract-langpack-eng || true && \
+    yum -y install java-11-openjdk-headless libreoffice-headless || true && \
+    yum -y install libXrender libXext libSM libX11 procps || true && \
+    yum clean all && rm -rf /var/cache/yum
 
-# Install core Python dependencies
-RUN pip install --upgrade pip==24.0 setuptools wheel
+# -------- Upgrade pip & build wheel support --------
+RUN python -m pip install --upgrade pip setuptools wheel
 
-# Pre-install NumPy to prevent upgrades during ML package installation
-RUN pip install --no-cache-dir numpy>=1.26.4
+# -------- Copy requirements and install --------
+COPY requirements.txt /tmp/requirements.txt
+# Install numpy first
+RUN python -m pip install --no-cache-dir numpy==1.26.4 && \
+    python -m pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Install ML stack first - allow source builds if needed
-RUN pip install --no-cache-dir \
-    torch>=2.3.0 \
-    transformers>=4.40.0 \
-    sentence-transformers>=2.7.0
+# -------- Copy application code --------
+COPY . /var/task
+WORKDIR /var/task
 
-# Install TensorFlow separately
-RUN pip install --no-cache-dir tensorflow>=2.16.0
+# Add runtime healthcheck for doc tools
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
+  CMD bash -c "command -v tesseract >/dev/null 2>&1 && command -v libreoffice >/dev/null 2>&1 || exit 1"
 
-# Copy and install remaining dependencies from requirements.txt
-# Temporarily disable agents to test other packages
-COPY agent-toolkit/requirements.txt ${LAMBDA_TASK_ROOT}/
-RUN pip install --no-cache-dir --prefer-binary \
-    -r requirements.txt
-
-# Set environment variables
-ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
-ENV HF_HOME=/tmp/huggingface_cache
-ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
-ENV TORCH_HOME=/tmp/torch_cache
-ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
-
-# Pre-download models
-RUN python -c "\
-import os; \
-try: \
-    from sentence_transformers import SentenceTransformer; \
-    model = SentenceTransformer('all-MiniLM-L6-v2'); \
-    print('Sentence transformer model downloaded'); \
-except Exception as e: \
-    print(f'Sentence transformer download failed: {e}'); \
-try: \
-    from docling.document_converter import DocumentConverter; \
-    converter = DocumentConverter(); \
-    print('Docling models downloaded'); \
-except Exception as e: \
-    print(f'Docling model download failed: {e}'); \
-"
-
-# Copy application code
-COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
-
-# Set the CMD to your handler
-CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
+# Example note: If torch or tensorflow cause image size issues
+# consider extracting them into a Lambda Layer or a separate container.
+CMD ["lambda_handlers.lambda_handler"]

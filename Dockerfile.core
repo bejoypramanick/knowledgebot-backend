@@ -1,99 +1,48 @@
-FROM public.ecr.aws/lambda/python:3.10
+# Dockerfile.core
+# Core runtime: Python 3.12 Lambda base with build tools and ML-friendly setup.
+FROM public.ecr.aws/lambda/python:3.12
 
-# Install minimal system dependencies for Amazon Linux 2023 (mandatory only)
-RUN yum update -y && \
-    yum install -y \
-    gcc \
-    gcc-c++ \
-    make \
-    libffi-devel \
-    openssl-devel \
-    zlib-devel \
-    bzip2-devel \
-    readline-devel \
-    sqlite-devel \
-    xz-devel \
-    expat-devel \
-    gdbm-devel \
-    ncurses-devel \
-    python3-devel \
-    && yum clean all
+# Metadata
+LABEL maintainer="you@example.com"
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1
 
-# Create cache directories
-RUN mkdir -p /tmp/transformers_cache \
-    /tmp/huggingface_cache \
-    /tmp/huggingface_datasets_cache \
-    /tmp/torch_cache \
-    /tmp/sentence_transformers_cache
+# Install system tools and basic native libs (Amazon Linux / Lambda image uses yum)
+RUN yum -y update && \
+    yum -y install \
+      gcc \
+      gcc-c++ \
+      make \
+      git \
+      wget \
+      unzip \
+      libjpeg-turbo-devel \
+      freetype-devel \
+      zlib-devel \
+      openssl-devel \
+      bzip2-devel \
+      xz-devel \
+      libffi-devel \
+      ca-certificates \
+      which \
+      procps || true && \
+    yum clean all && rm -rf /var/cache/yum
 
-# Install core Python dependencies
-RUN pip install --upgrade pip==24.0 setuptools wheel
+# Upgrade pip & friends (important for manylinux wheels)
+RUN python -m pip install --upgrade pip setuptools wheel
 
-# Pre-install NumPy to prevent upgrades during ML package installation
-RUN pip install --no-cache-dir numpy>=1.26.4
+# Copy requirements in
+COPY requirements.txt /tmp/requirements.txt
 
-# Basic dependencies (matched with requirements.txt)
-RUN pip install --no-cache-dir \
-    requests>=2.32.3 \
-    python-dotenv>=1.0.1 \
-    typing-extensions>=4.12.2 \
-    pydantic>=2.9.0
+# Install numpy first to reduce chance of source builds for other packages
+RUN python -m pip install --no-cache-dir numpy==1.26.4 && \
+    python -m pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Install pandas after NumPy is locked
-RUN pip install --no-cache-dir pandas>=2.2.2
+# Copy application code (adjust path as required)
+COPY . /var/task
+WORKDIR /var/task
 
-# AWS and database clients (matched with requirements.txt)
-RUN pip install --no-cache-dir \
-    boto3>=1.35.0 \
-    botocore>=1.35.0 \
-    pinecone-client>=3.1.0 \
-    neo4j>=5.24.0
-
-# Install sentencepiece - try prebuilt wheel first, fallback to build
-RUN pip install --no-cache-dir sentencepiece>=0.1.99 || \
-    pip install --no-cache-dir --no-binary sentencepiece sentencepiece>=0.1.99
-
-# ML dependencies – allow source builds if needed
-RUN pip install --no-cache-dir \
-    torch>=2.3.0 \
-    transformers>=4.40.0 \
-    sentence-transformers>=2.7.0
-
-# Install TensorFlow separately
-RUN pip install --no-cache-dir tensorflow>=2.16.0
-
-# Remaining dependencies - allow agents to build from source
-RUN pip install --no-cache-dir \
-    openai==1.12.0 \
-    httpx==0.25.0 \
-    orjson==3.9.10 \
-    structlog==23.2.0
-
-# Install agents separately to allow source build
-# RUN pip install --no-cache-dir --no-binary agents agents==1.4.0  # Temporarily disabled
-
-# Pre-download sentence transformer model
-RUN python -c "\
-import os; \
-os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'; \
-os.environ['HF_HOME'] = '/tmp/huggingface_cache'; \
-os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'; \
-os.environ['TORCH_HOME'] = '/tmp/torch_cache'; \
-os.environ['SENTENCE_TRANSFORMERS_HOME'] = '/tmp/sentence_transformers_cache'; \
-from sentence_transformers import SentenceTransformer; \
-model = SentenceTransformer('all-MiniLM-L6-v2'); \
-print('Sentence transformer model downloaded and cached'); \
-"
-
-# Set environment variables
-ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
-ENV HF_HOME=/tmp/huggingface_cache
-ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
-ENV TORCH_HOME=/tmp/torch_cache
-ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
-
-# Copy application code
-COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
-
-# Set the CMD to your handler
-CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
+# Default Lambda handler - change to your handler
+CMD ["lambda_handlers.lambda_handler"]
