@@ -58,7 +58,8 @@ class DoclingProcessor:
                  enable_hierarchical_chunking: bool = True,
                  min_chunk_size: int = 100,
                  max_chunk_size: int = 2000,
-                 chunk_overlap: int = 200):
+                 chunk_overlap: int = 200,
+                 strict_mode: bool = True):
         """
         Initialize Docling processor
         
@@ -68,12 +69,14 @@ class DoclingProcessor:
             min_chunk_size: Minimum chunk size in characters
             max_chunk_size: Maximum chunk size in characters
             chunk_overlap: Overlap between chunks in characters
+            strict_mode: If True, fail if Docling can't process document (no fallback)
         """
         self.cache_dir = cache_dir
         self.enable_hierarchical_chunking = enable_hierarchical_chunking
         self.min_chunk_size = min_chunk_size
         self.max_chunk_size = max_chunk_size
         self.chunk_overlap = chunk_overlap
+        self.strict_mode = strict_mode
         
         # Create cache directory
         os.makedirs(cache_dir, exist_ok=True)
@@ -140,40 +143,40 @@ class DoclingProcessor:
             # Extract document metadata
             doc_metadata = self._extract_document_metadata(doc, document_id)
             
-            # Process document into chunks
-            if self.enable_hierarchical_chunking:
-                chunks = self._create_hierarchical_chunks(doc, document_id)
-            else:
-                chunks = self._create_default_chunks(doc, document_id)
-            
-            processing_time = time.time() - start_time
-            
-            logger.info(f"Document processed successfully: {len(chunks)} chunks in {processing_time:.2f}s")
-            
-            return DocumentProcessingResult(
-                document_id=document_id,
-                document_type=doc_metadata.get('document_type', 'unknown'),
-                total_chunks=len(chunks),
-                hierarchical_chunks=chunks,
-                processing_time=processing_time,
-                success=True,
-                metadata=doc_metadata
-            )
-            
-        except Exception as e:
-            processing_time = time.time() - start_time
-            error_msg = f"Failed to process document {document_path}: {str(e)}"
-            logger.error(error_msg)
-            
-            return DocumentProcessingResult(
-                document_id=document_id or "unknown",
-                document_type="unknown",
-                total_chunks=0,
-                hierarchical_chunks=[],
-                processing_time=processing_time,
-                success=False,
-                error_message=error_msg
-            )
+        # Process document into chunks using Docling hierarchical chunking
+        if self.enable_hierarchical_chunking:
+            chunks = self._create_hierarchical_chunks(doc, document_id)
+        else:
+            raise Exception("Hierarchical chunking is disabled - Docling processing requires hierarchical chunking")
+        
+        processing_time = time.time() - start_time
+        
+        logger.info(f"Document processed successfully: {len(chunks)} chunks in {processing_time:.2f}s")
+        
+        return DocumentProcessingResult(
+            document_id=document_id,
+            document_type=doc_metadata.get('document_type', 'unknown'),
+            total_chunks=len(chunks),
+            hierarchical_chunks=chunks,
+            processing_time=processing_time,
+            success=True,
+            metadata=doc_metadata
+        )
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        error_msg = f"Failed to process document {document_path}: {str(e)}"
+        logger.error(error_msg)
+        
+        return DocumentProcessingResult(
+            document_id=document_id or "unknown",
+            document_type="unknown",
+            total_chunks=0,
+            hierarchical_chunks=[],
+            processing_time=processing_time,
+            success=False,
+            error_message=error_msg
+        )
     
     def _generate_document_id(self, document_path: str) -> str:
         """Generate a unique document ID based on file path and content"""
@@ -277,18 +280,23 @@ class DoclingProcessor:
                 chunks.append(chunk)
                 chunk_index += 1
             
-            # If no structured chunks found, fall back to default chunking
+            # If no structured chunks found, fail in strict mode
             if not chunks:
-                logger.info("No structured elements found, falling back to default chunking")
-                chunks = self._create_default_chunks(doc, document_id)
+                if self.strict_mode:
+                    raise Exception("No structured elements found in document - Docling processing failed")
+                else:
+                    logger.warning("No structured elements found, but strict_mode=False, returning empty chunks")
             
             logger.info(f"Created {len(chunks)} hierarchical chunks for document {document_id}")
             return chunks
             
         except Exception as e:
             logger.error(f"Failed to create hierarchical chunks: {e}")
-            # Fallback to default chunking
-            return self._create_default_chunks(doc, document_id)
+            if self.strict_mode:
+                raise Exception(f"Docling hierarchical chunking failed: {str(e)}")
+            else:
+                logger.warning("Strict mode disabled, returning empty chunks")
+                return []
     
     def _classify_element(self, element, element_type: str) -> tuple[str, int]:
         """Classify document element and determine hierarchy level"""
@@ -329,62 +337,6 @@ class DoclingProcessor:
         else:  # H3+
             return f"{current_path} > {element_text[:20]}"
     
-    def _create_default_chunks(self, doc: Document, document_id: str) -> List[Dict[str, Any]]:
-        """
-        Create default chunks using Docling's built-in chunking strategy
-        This serves as a fallback when hierarchical chunking fails
-        """
-        chunks = []
-        chunk_index = 0
-        
-        try:
-            # Get all text content from document
-            full_text = ""
-            for element in doc.iterate_items():
-                element_text = getattr(element, 'text', '') or str(element)
-                if element_text.strip():
-                    full_text += element_text + "\n\n"
-            
-            if not full_text.strip():
-                logger.warning("No text content found in document")
-                return chunks
-            
-            # Split into chunks using sliding window approach
-            words = full_text.split()
-            chunk_size = self.max_chunk_size // 6  # Approximate words per chunk
-            
-            for i in range(0, len(words), chunk_size - self.chunk_overlap // 6):
-                chunk_words = words[i:i + chunk_size]
-                chunk_text = " ".join(chunk_words)
-                
-                if len(chunk_text.strip()) < self.min_chunk_size:
-                    continue
-                
-                chunk = {
-                    'chunk_id': f"{document_id}_chunk_{chunk_index}",
-                    'document_id': document_id,
-                    'content': chunk_text,
-                    'chunk_type': 'default',
-                    'hierarchy_level': 3,
-                    'section_path': '',
-                    'metadata': {
-                        'word_count': len(chunk_words),
-                        'char_count': len(chunk_text),
-                        'page_number': None,
-                        'confidence_score': 0.8,
-                        'chunk_index': chunk_index
-                    }
-                }
-                
-                chunks.append(chunk)
-                chunk_index += 1
-            
-            logger.info(f"Created {len(chunks)} default chunks for document {document_id}")
-            return chunks
-            
-        except Exception as e:
-            logger.error(f"Failed to create default chunks: {e}")
-            return []
     
     def process_document_from_bytes(self, 
                                   document_bytes: bytes, 
@@ -433,8 +385,8 @@ class DoclingProcessor:
 _docling_processor = None
 
 def get_docling_processor() -> DoclingProcessor:
-    """Get global Docling processor instance"""
+    """Get global Docling processor instance with strict mode enabled"""
     global _docling_processor
     if _docling_processor is None:
-        _docling_processor = DoclingProcessor()
+        _docling_processor = DoclingProcessor(strict_mode=True)
     return _docling_processor
