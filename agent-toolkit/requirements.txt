@@ -17,9 +17,9 @@ pinecone-client>=3.1.0
 # Graph Database
 neo4j>=5.24.0
 
-# Document Processing (Docling with Tesseract OCR support)
-# System requirements: tesseract, tesseract-devel, tesseract-langpack-eng
-# Install with: pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
+# Document Processing (Docling - handles most processing via Python packages)
+# Basic installation: pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
+# OCR features (optional): Require tesseract system packages for scanned documents
 docling>=2.25.0
 
 # Machine Learning Stack (Python 3.12 compatible)

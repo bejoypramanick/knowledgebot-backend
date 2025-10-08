@@ -55,7 +55,6 @@ RUN python -m pip install --no-cache-dir \
 RUN python -m pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     torch>=2.1.0 \
-    torchvision \
     && python -m pip install --no-cache-dir \
     docling>=2.25.0
 
