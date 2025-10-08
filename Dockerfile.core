@@ -79,12 +79,8 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir sentencepiece==0.1.99 || \
     pip install --no-cache-dir --no-binary sentencepiece sentencepiece==0.1.99
 
-# ML dependencies – use prebuilt wheels where possible
-RUN pip install --no-cache-dir --only-binary :all: \
-    torch==2.1.0 \
-    transformers==4.36.0 \
-    sentence-transformers==2.2.2 || \
-    pip install --no-cache-dir \
+# ML dependencies – allow source builds if needed
+RUN pip install --no-cache-dir \
     torch==2.1.0 \
     transformers==4.36.0 \
     sentence-transformers==2.2.2
