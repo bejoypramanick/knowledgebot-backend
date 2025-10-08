@@ -1,18 +1,11 @@
-FROM public.ecr.aws/lambda/python:3.10
+FROM public.ecr.aws/lambda/python:3.13
 
-# Install system dependencies for Amazon Linux 2023
+# Install system dependencies for Amazon Linux 2023 (Docling needs image processing)
 RUN yum update -y && \
     yum install -y \
     gcc \
     gcc-c++ \
-    gcc10 \
-    gcc10-c++ \
     make \
-    cmake \
-    git \
-    wget \
-    curl \
-    unzip \
     libffi-devel \
     openssl-devel \
     libjpeg-devel \
@@ -21,10 +14,6 @@ RUN yum update -y && \
     freetype-devel \
     lcms2-devel \
     libwebp-devel \
-    tcl-devel \
-    tk-devel \
-    libxml2-devel \
-    libxslt-devel \
     zlib-devel \
     bzip2-devel \
     readline-devel \
@@ -33,13 +22,8 @@ RUN yum update -y && \
     expat-devel \
     gdbm-devel \
     ncurses-devel \
-    libuuid-devel \
     python3-devel \
     && yum clean all
-
-# Set environment variables to use GCC 10 for C++20 support
-ENV CC=/usr/bin/gcc10
-ENV CXX=/usr/bin/g++10
 
 # Create cache directories
 RUN mkdir -p /tmp/transformers_cache \

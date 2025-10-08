@@ -1,28 +1,13 @@
-FROM public.ecr.aws/lambda/python:3.13
+FROM public.ecr.aws/lambda/python:3.10
 
-# Install system dependencies for Amazon Linux 2023
+# Install minimal system dependencies for Amazon Linux 2023 (mandatory only)
 RUN yum update -y && \
     yum install -y \
     gcc \
     gcc-c++ \
     make \
-    cmake \
-    git \
-    wget \
-    curl \
-    unzip \
     libffi-devel \
     openssl-devel \
-    libjpeg-devel \
-    libpng-devel \
-    libtiff-devel \
-    freetype-devel \
-    lcms2-devel \
-    libwebp-devel \
-    tcl-devel \
-    tk-devel \
-    libxml2-devel \
-    libxslt-devel \
     zlib-devel \
     bzip2-devel \
     readline-devel \
@@ -31,7 +16,6 @@ RUN yum update -y && \
     expat-devel \
     gdbm-devel \
     ncurses-devel \
-    libuuid-devel \
     python3-devel \
     && yum clean all
 
