@@ -1,0 +1,19 @@
+FROM public.ecr.aws/lambda/python:3.10
+
+# Test basic Python functionality
+RUN python -c "print('Python works!')"
+
+# Test basic pip
+RUN pip --version
+
+# Test basic package installation
+RUN pip install --no-cache-dir requests
+
+# Test import
+RUN python -c "import requests; print('Requests works!')"
+
+# Copy minimal code
+COPY agent-toolkit/lambda_handlers.py ${LAMBDA_TASK_ROOT}/
+
+# Set the CMD
+CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
