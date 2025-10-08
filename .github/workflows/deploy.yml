@@ -35,13 +35,11 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Create ECR repositories
+    - name: Create ECR repository
       run: |
-        echo "📦 Creating ECR repositories..."
-        for repo in core docling final; do
-          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }}-$repo --region ${{ env.AWS_REGION }} || \
-          aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }}-$repo --region ${{ env.AWS_REGION }}
-        done
+        echo "📦 Creating ECR repository..."
+        aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} || \
+        aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }}
 
   # Job 2: Build Core Dependencies Image (Parallel)
   build-core:
@@ -75,8 +73,8 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         echo "🐳 Building core dependencies image..."
-        docker build -f Dockerfile.core -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}-core:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}-core:$IMAGE_TAG
+        docker build -f Dockerfile.core -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:core-$IMAGE_TAG .
+        docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:core-$IMAGE_TAG
         echo "✅ Core image built and pushed successfully"
 
   # Job 3: Build Docling Image (Parallel)
@@ -111,8 +109,8 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         echo "🐳 Building Docling image..."
-        docker build -f Dockerfile.docling -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}-docling:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}-docling:$IMAGE_TAG
+        docker build -f Dockerfile.docling -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG .
+        docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG
         echo "✅ Docling image built and pushed successfully"
 
   # Job 4: Build Final Application Image (Sequential - after core and docling)
@@ -147,8 +145,8 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         echo "🐳 Building final application image..."
-        docker build -f Dockerfile.final -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+        docker build -f Dockerfile.final -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG .
+        docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG
         echo "✅ Final image built and pushed successfully"
 
   # Job 5: Deploy to Lambda (Depends on all builds)
@@ -183,16 +181,45 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         echo "🚀 Deploying Lambda functions..."
-        
-        # Update Lambda function code
-        aws lambda update-function-code \
-          --function-name knowledgebot-chat \
-          --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG \
-          --region ${{ env.AWS_REGION }}
-        
-        aws lambda update-function-code \
-          --function-name knowledgebot-document-ingestion \
-          --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}-docling:$IMAGE_TAG \
-          --region ${{ env.AWS_REGION }}
-        
+
+        # Function: knowledgebot-chat (Main chat functionality)
+        if aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+          echo "📝 Updating existing knowledgebot-chat function..."
+          aws lambda update-function-code \
+            --function-name knowledgebot-chat \
+            --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
+            --region ${{ env.AWS_REGION }}
+        else
+          echo "🆕 Creating knowledgebot-chat function..."
+          aws lambda create-function \
+            --function-name knowledgebot-chat \
+            --package-type Image \
+            --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
+            --architectures arm64 \
+            --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
+            --region ${{ env.AWS_REGION }} \
+            --timeout 300 \
+            --memory-size 2048
+        fi
+
+        # Function: knowledgebot-document-ingestion (Document processing)
+        if aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+          echo "📝 Updating existing knowledgebot-document-ingestion function..."
+          aws lambda update-function-code \
+            --function-name knowledgebot-document-ingestion \
+            --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
+            --region ${{ env.AWS_REGION }}
+        else
+          echo "🆕 Creating knowledgebot-document-ingestion function..."
+          aws lambda create-function \
+            --function-name knowledgebot-document-ingestion \
+            --package-type Image \
+            --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
+            --architectures arm64 \
+            --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
+            --region ${{ env.AWS_REGION }} \
+            --timeout 900 \
+            --memory-size 4096
+        fi
+
         echo "✅ Lambda functions deployed successfully"
