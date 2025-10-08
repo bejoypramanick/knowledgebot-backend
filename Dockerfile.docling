@@ -86,8 +86,8 @@ RUN pip install --no-cache-dir tensorflow==2.20.0
 RUN pip install --no-cache-dir sentencepiece==0.1.99 || \
     pip install --no-cache-dir --no-binary sentencepiece sentencepiece==0.1.99
 
-# Install Docling with correct version constraint from requirements.txt
-RUN pip install --no-cache-dir "docling>=1.3.0,<1.7.0"
+# Install Docling with specific version for stability
+RUN pip install --no-cache-dir docling==1.3.0
 
 # AWS and database clients (matched with requirements.txt)
 RUN pip install --no-cache-dir \
@@ -114,29 +114,17 @@ ENV TORCH_HOME=/tmp/torch_cache
 ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
 ENV DOCLING_CACHE_DIR=/tmp/docling_cache
 
-# Pre-download and cache all Docling models including OCR
+# Pre-download and cache Docling models
 RUN python -c "\
-import os; \
 try: \
     from docling.document_converter import DocumentConverter; \
-    from docling.datamodel.base_models import InputFormat; \
-    from docling.datamodel.pipeline_options import PdfPipelineOptions; \
-    from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend; \
-    print('Initializing Docling with OCR enabled...'); \
-    pdf_options = PdfPipelineOptions(); \
-    pdf_options.do_ocr = True; \
-    pdf_options.do_table_structure = True; \
-    pdf_options.table_structure_options.do_cell_matching = True; \
-    converter = DocumentConverter( \
-        format_options={InputFormat.PDF: pdf_options}, \
-        backends=[PyPdfiumDocumentBackend()] \
-    ); \
+    print('Initializing Docling...'); \
+    converter = DocumentConverter(); \
     print('Docling converter initialized successfully'); \
-    print('OCR models and all dependencies pre-downloaded and cached'); \
+    print('Models pre-downloaded and cached'); \
 except Exception as e: \
-    print(f'Docling model download failed: {e}'); \
-    import traceback; \
-    traceback.print_exc(); \
+    print(f'Docling initialization failed: {e}'); \
+    print('Continuing without pre-download...'); \
 "
 
 # Copy application code
