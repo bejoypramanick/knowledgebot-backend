@@ -5,6 +5,8 @@ RUN yum update -y && \
     yum install -y \
     gcc \
     gcc-c++ \
+    gcc10 \
+    gcc10-c++ \
     make \
     cmake \
     git \
@@ -32,9 +34,19 @@ RUN yum update -y && \
     gdbm-devel \
     ncurses-devel \
     libuuid-devel \
-    libffi-devel \
     python3-devel \
     && yum clean all
+
+# Set environment variables to use GCC 10 for C++20 support
+ENV CC=/usr/bin/gcc10
+ENV CXX=/usr/bin/g++10
+
+# Create cache directories
+RUN mkdir -p /tmp/transformers_cache \
+    /tmp/huggingface_cache \
+    /tmp/huggingface_datasets_cache \
+    /tmp/torch_cache \
+    /tmp/sentence_transformers_cache
 
 # Install core Python dependencies
 RUN pip install --upgrade pip==24.0 setuptools wheel
@@ -42,42 +54,30 @@ RUN pip install --upgrade pip==24.0 setuptools wheel
 # Pre-install NumPy to prevent upgrades during ML package installation
 RUN pip install --no-cache-dir numpy==1.26.4
 
-# Install ML stack first (allow prebuilt wheels for Python 3.10)
-# Install GCC 10 for C++20 support (required for ml_dtypes and optree)
-RUN yum update -y && \
-    yum install -y \
-        gcc10 \
-        gcc10-c++ \
-        make \
-        cmake \
-    && \
-    yum clean all
-
-# Set environment variables to use GCC 10
-ENV CC=/usr/bin/gcc10
-ENV CXX=/usr/bin/g++10
-
+# Install ML stack first (these are pinned in requirements.txt)
 RUN pip install --no-cache-dir \
     torch==2.1.0 \
     transformers==4.36.0 \
     sentence-transformers==2.2.2 \
     tensorflow==2.20.0
 
-# Install remaining dependencies from requirements.txt
-# Allow agents to build from source if no wheel available
+# Copy and install remaining dependencies from requirements.txt
+# Exclude ML packages already installed to avoid conflicts
 COPY agent-toolkit/requirements.txt ${LAMBDA_TASK_ROOT}/
-RUN pip install --no-cache-dir --prefer-binary \
+RUN pip install --no-cache-dir \
     --no-binary agents \
-    -r requirements.txt
+    $(grep -vE "^(torch|transformers|sentence-transformers|tensorflow|numpy)==" requirements.txt | grep -v "^#" | grep -v "^$")
+
+# Set environment variables
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/huggingface_cache
+ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
+ENV TORCH_HOME=/tmp/torch_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
 
 # Pre-download models
 RUN python -c "\
 import os; \
-os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'; \
-os.environ['HF_HOME'] = '/tmp/huggingface_cache'; \
-os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'; \
-os.environ['TORCH_HOME'] = '/tmp/torch_cache'; \
-os.environ['SENTENCE_TRANSFORMERS_HOME'] = '/tmp/sentence_transformers_cache'; \
 try: \
     from sentence_transformers import SentenceTransformer; \
     model = SentenceTransformer('all-MiniLM-L6-v2'); \
@@ -91,13 +91,6 @@ try: \
 except Exception as e: \
     print(f'Docling model download failed: {e}'); \
 "
-
-# Set environment variables
-ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
-ENV HF_HOME=/tmp/huggingface_cache
-ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
-ENV TORCH_HOME=/tmp/torch_cache
-ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
 
 # Copy application code
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
