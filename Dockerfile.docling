@@ -94,16 +94,34 @@ RUN pip install --no-cache-dir \
     orjson==3.9.10 \
     structlog==23.2.0
 
-# Pre-download Docling models
+# Pre-download and cache all Docling models including OCR
 RUN python -c "\
+import os; \
+os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'; \
+os.environ['HF_HOME'] = '/tmp/huggingface_cache'; \
+os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'; \
+os.environ['TORCH_HOME'] = '/tmp/torch_cache'; \
+os.environ['SENTENCE_TRANSFORMERS_HOME'] = '/tmp/sentence_transformers_cache'; \
 try: \
     from docling.document_converter import DocumentConverter; \
     from docling.datamodel.base_models import InputFormat; \
     from docling.datamodel.pipeline_options import PdfPipelineOptions; \
-    converter = DocumentConverter(); \
-    print('Docling models downloaded and cached'); \
+    from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend; \
+    print('Initializing Docling with OCR enabled...'); \
+    pdf_options = PdfPipelineOptions(); \
+    pdf_options.do_ocr = True; \
+    pdf_options.do_table_structure = True; \
+    pdf_options.table_structure_options.do_cell_matching = True; \
+    converter = DocumentConverter( \
+        format_options={InputFormat.PDF: pdf_options}, \
+        backends=[PyPdfiumDocumentBackend()] \
+    ); \
+    print('Docling converter initialized successfully'); \
+    print('OCR models and all dependencies pre-downloaded and cached'); \
 except Exception as e: \
     print(f'Docling model download failed: {e}'); \
+    import traceback; \
+    traceback.print_exc(); \
 "
 
 # Set environment variables
@@ -112,6 +130,10 @@ ENV HF_HOME=/tmp/huggingface_cache
 ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
 ENV TORCH_HOME=/tmp/torch_cache
 ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
+ENV DOCLING_CACHE_DIR=/tmp/docling_cache
+
+# Create Docling cache directory
+RUN mkdir -p /tmp/docling_cache
 
 # Copy application code
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
