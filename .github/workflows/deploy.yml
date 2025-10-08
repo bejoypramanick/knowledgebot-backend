@@ -3,8 +3,18 @@ name: Deploy KnowledgeBot Backend - Parallel Build
 on:
   push:
     branches: [ main ]
+    paths:
+      - '.github/workflows/deploy.yml'
+      - 'Dockerfile.*'
+      - 'agent-toolkit/**'
+      - 'requirements*.txt'
   pull_request:
     branches: [ main ]
+    paths:
+      - '.github/workflows/deploy.yml'
+      - 'Dockerfile.*'
+      - 'agent-toolkit/**'
+      - 'requirements*.txt'
 
 env:
   AWS_REGION: ap-south-1
@@ -47,7 +57,7 @@ jobs:
     needs: setup-infrastructure
     if: always() && (needs.setup-infrastructure.result == 'success' || needs.setup-infrastructure.result == 'skipped')
     environment: chatbot
-    
+
     permissions:
       id-token: write
       contents: read
@@ -56,7 +66,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check for core-related changes
+      id: core-filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          core:
+            - 'Dockerfile.core'
+            - 'requirements-basic.txt'
+            - 'agent-toolkit/**'
+
     - name: Configure AWS credentials
+      if: steps.core-filter.outputs.core == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -64,10 +85,12 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Login to Amazon ECR
+      if: steps.core-filter.outputs.core == 'true'
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Build and push core image
+      if: steps.core-filter.outputs.core == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
@@ -76,6 +99,10 @@ jobs:
         docker build -f Dockerfile.core -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:core-$IMAGE_TAG .
         docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:core-$IMAGE_TAG
         echo "✅ Core image built and pushed successfully"
+
+    - name: Skip core build
+      if: steps.core-filter.outputs.core == 'false'
+      run: echo "⏭️ No core-related changes detected. Skipping core build."
 
   # Job 3: Build Docling Image (Parallel)
   build-docling:
@@ -92,7 +119,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check for docling-related changes
+      id: docling-filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          docling:
+            - 'Dockerfile.docling'
+            - 'agent-toolkit/**'
+
     - name: Configure AWS credentials
+      if: steps.docling-filter.outputs.docling == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -100,10 +137,12 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Login to Amazon ECR
+      if: steps.docling-filter.outputs.docling == 'true'
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Build and push docling image
+      if: steps.docling-filter.outputs.docling == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
@@ -112,6 +151,10 @@ jobs:
         docker build -f Dockerfile.docling -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG .
         docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG
         echo "✅ Docling image built and pushed successfully"
+
+    - name: Skip docling build
+      if: steps.docling-filter.outputs.docling == 'false'
+      run: echo "⏭️ No docling-related changes detected. Skipping docling build."
 
   # Job 4: Build Final Application Image (Sequential - after core and docling)
   build-final:
@@ -128,7 +171,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check for final-related changes
+      id: final-filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          final:
+            - 'Dockerfile.final'
+            - 'requirements.txt'
+            - 'agent-toolkit/**'
+
     - name: Configure AWS credentials
+      if: steps.final-filter.outputs.final == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -136,10 +190,12 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Login to Amazon ECR
+      if: steps.final-filter.outputs.final == 'true'
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Build and push final image
+      if: steps.final-filter.outputs.final == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
@@ -149,13 +205,22 @@ jobs:
         docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG
         echo "✅ Final image built and pushed successfully"
 
+    - name: Skip final build
+      if: steps.final-filter.outputs.final == 'false'
+      run: echo "⏭️ No final-related changes detected. Skipping final build."
+
   # Job 5: Deploy to Lambda (Depends on all builds)
   deploy:
     runs-on: ubuntu-latest
     needs: [setup-infrastructure, build-core, build-docling, build-final]
-    if: always() && (needs.setup-infrastructure.result == 'success' || needs.setup-infrastructure.result == 'skipped')
+    if: |
+      always() &&
+      (needs.setup-infrastructure.result == 'success' || needs.setup-infrastructure.result == 'skipped') &&
+      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped' ||
+       needs.build-docling.result == 'success' || needs.build-docling.result == 'skipped' ||
+       needs.build-final.result == 'success' || needs.build-final.result == 'skipped')
     environment: chatbot
-    
+
     permissions:
       id-token: write
       contents: read
@@ -164,7 +229,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check for deployment-related changes
+      id: deploy-filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          deploy:
+            - '.github/workflows/deploy.yml'
+            - 'Dockerfile.*'
+            - 'requirements*.txt'
+            - 'agent-toolkit/**'
+
     - name: Configure AWS credentials
+      if: steps.deploy-filter.outputs.deploy == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -172,10 +249,12 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Login to Amazon ECR
+      if: steps.deploy-filter.outputs.deploy == 'true'
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Deploy Lambda functions
+      if: steps.deploy-filter.outputs.deploy == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
@@ -223,3 +302,7 @@ jobs:
         fi
 
         echo "✅ Lambda functions deployed successfully"
+
+    - name: Skip deployment
+      if: steps.deploy-filter.outputs.deploy == 'false'
+      run: echo "⏭️ No deployment-related changes detected. Skipping deployment."
