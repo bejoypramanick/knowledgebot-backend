@@ -1,0 +1,45 @@
+# Docling Core Base Image - Document processing without OCR
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install minimal system dependencies
+RUN dnf install -y \
+    gcc \
+    gcc-c++ \
+    && dnf clean all
+
+# Install Docling core without OCR dependencies
+RUN pip install --upgrade pip && \
+    pip install --upgrade "setuptools>=68.0.0" wheel && \
+    pip install --no-cache-dir \
+    "docling>=2.55.1" \
+    "numpy>=1.26.0,<2.0.0" \
+    "httpx>=0.27.0,<0.29.0"
+
+# Create artifacts directory for Docling
+RUN mkdir -p /tmp/docling_artifacts
+
+# Pre-initialize core Docling (no OCR, no table structure)
+RUN python -c "\
+import os; \
+os.environ['DOCLING_ARTIFACTS_PATH'] = '/tmp/docling_artifacts'; \
+os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'; \
+os.environ['HF_HOME'] = '/tmp/huggingface_cache'; \
+os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'; \
+os.environ['TORCH_HOME'] = '/tmp/torch_cache'; \
+from docling.document_converter import DocumentConverter; \
+from docling.datamodel.base_models import InputFormat; \
+from docling.datamodel.pipeline_options import PdfPipelineOptions; \
+converter = DocumentConverter(format_options={InputFormat.PDF: PdfPipelineOptions(do_ocr=False, do_table_structure=False)}); \
+print('Docling core base image initialized successfully')"
+
+# Set environment variables for /tmp caching
+ENV DOCLING_ARTIFACTS_PATH=/tmp/docling_artifacts
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/huggingface_cache
+ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
+ENV TORCH_HOME=/tmp/torch_cache
+
+# Label for identification
+LABEL base_image="docling-core" \
+      version="1.0" \
+      description="Core Docling without OCR or table structure"

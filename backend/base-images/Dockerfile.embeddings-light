@@ -1,0 +1,37 @@
+# Lightweight Embeddings Base Image - Only essential models
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install minimal dependencies for embeddings with space optimization
+RUN pip install --upgrade pip --no-cache-dir && \
+    pip install --upgrade "setuptools>=68.0.0" wheel --no-cache-dir && \
+    pip install --no-cache-dir "numpy>=1.26.0,<2.0.0" "torch>=2.0.0" --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir \
+    "transformers>=4.30.0" \
+    "sentence-transformers>=2.7.0,<3.0.0" \
+    "tokenizers" "huggingface-hub" "requests" "tqdm" "packaging" "filelock" "fsspec" "pyyaml" "regex" "safetensors" "scikit-learn" "scipy" "joblib" "threadpoolctl" "Pillow" "jinja2" "networkx" "sympy>=1.13.3"
+
+# Pre-download only the most essential model
+RUN python -c "\
+import os; \
+from sentence_transformers import SentenceTransformer; \
+cache_dir = '/tmp/sentence_transformers_cache'; \
+os.makedirs(cache_dir, exist_ok=True); \
+os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'; \
+os.environ['HF_HOME'] = '/tmp/huggingface_cache'; \
+os.environ['HF_DATASETS_CACHE'] = '/tmp/huggingface_datasets_cache'; \
+os.environ['TORCH_HOME'] = '/tmp/torch_cache'; \
+os.environ['SENTENCE_TRANSFORMERS_HOME'] = cache_dir; \
+model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder=cache_dir); \
+print('Lightweight embeddings base image initialized successfully')"
+
+# Set environment variables for consistent caching in /tmp
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/huggingface_cache
+ENV HF_DATASETS_CACHE=/tmp/huggingface_datasets_cache
+ENV TORCH_HOME=/tmp/torch_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
+
+# Label for identification
+LABEL base_image="embeddings-light" \
+      version="1.0" \
+      description="Lightweight embeddings with only essential models"

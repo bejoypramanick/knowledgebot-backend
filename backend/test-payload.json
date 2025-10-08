@@ -1,0 +1,1 @@
+{"Records":[{"eventName":"s3:ObjectCreated:Put","s3":{"bucket":{"name":"chatbot-storage-ap-south-1"},"object":{"key":"documents/test-document-1759616655.md"}}}]}
