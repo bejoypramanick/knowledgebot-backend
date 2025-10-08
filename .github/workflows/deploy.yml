@@ -251,6 +251,9 @@ jobs:
             pinecone-client==2.2.4 \
             neo4j==5.15.0
         
+        # Install sentencepiece as precompiled wheel first
+        RUN pip install --no-cache-dir sentencepiece==0.1.99
+        
         # ML dependencies — use no-build-isolation to prevent NumPy 2.x upgrade
         RUN pip install --no-cache-dir \
             torch==2.1.0 \
