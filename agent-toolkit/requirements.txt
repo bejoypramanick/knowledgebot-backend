@@ -15,8 +15,10 @@ neo4j>=5.0.0
 
 # Document Processing
 docling>=1.0.0
-sentence-transformers>=2.2.0
 transformers>=4.30.0
+
+# OpenAI for embeddings
+openai>=1.0.0
 torch>=2.0.0
 
 # Data Processing

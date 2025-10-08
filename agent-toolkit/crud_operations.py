@@ -31,12 +31,13 @@ try:
         auth=(os.environ.get('NEO4J_USER'), os.environ.get('NEO4J_PASSWORD'))
     )
     
-    # Try to initialize embedding model
+    # Initialize OpenAI embedding model
     try:
-        from sentence_transformers import SentenceTransformer
-        _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        import openai
+        _embedding_model = None  # We'll use OpenAI API directly
+        openai.api_key = os.environ.get('OPENAI_API_KEY')
     except Exception as e:
-        logger.warning(f"Embedding model not available: {e}")
+        logger.warning(f"OpenAI not available: {e}")
 
 except Exception as e:
     logger.error(f"Error initializing services: {e}")
@@ -331,7 +332,7 @@ def delete_dynamodb_crud(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]
 
 def generate_embedding_crud(text: str) -> Dict[str, Any]:
     """
-    CRUD: Generate embedding vector for text
+    CRUD: Generate embedding vector for text using OpenAI text-embedding-3-small
     
     Args:
         text: Text to embed
@@ -340,19 +341,22 @@ def generate_embedding_crud(text: str) -> Dict[str, Any]:
         Raw embedding vector or error
     """
     try:
-        if not _embedding_model:
-            return {
-                'success': False,
-                'error': 'Embedding model not available'
-            }
+        import openai
         
-        embedding = _embedding_model.encode(text)
+        # Generate embedding using OpenAI API
+        response = openai.embeddings.create(
+            model="text-embedding-3-small",
+            input=text
+        )
+        
+        embedding = response.data[0].embedding
         
         return {
             'success': True,
-            'embedding': embedding.tolist(),
+            'embedding': embedding,
             'text_length': len(text),
-            'embedding_dimension': len(embedding)
+            'embedding_dimension': len(embedding),
+            'model': 'text-embedding-3-small'
         }
     except Exception as e:
         return {
