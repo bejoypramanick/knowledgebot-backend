@@ -258,6 +258,13 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+        PINECONE_ENVIRONMENT: ${{ secrets.PINECONE_ENVIRONMENT }}
+        PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
+        PINECONE_HOST: ${{ secrets.PINECONE_HOST }}
+        PINECONE_DIMENSIONS: ${{ secrets.PINECONE_DIMENSIONS }}
+        DOCUMENTS_BUCKET: ${{ secrets.DOCUMENTS_BUCKET }}
       run: |
         echo "🚀 Deploying Lambda functions..."
 
@@ -335,12 +342,12 @@ jobs:
           aws lambda update-function-configuration \
             --function-name knowledgebot-chat \
             --environment "Variables={
-              OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}',
-              PINECONE_API_KEY='${{ secrets.PINECONE_API_KEY }}',
-              PINECONE_ENVIRONMENT='${{ secrets.PINECONE_ENVIRONMENT }}',
-              PINECONE_INDEX_NAME='${{ secrets.PINECONE_INDEX_NAME }}',
-              PINECONE_HOST='${{ secrets.PINECONE_HOST }}',
-              PINECONE_DIMENSIONS='${{ secrets.PINECONE_DIMENSIONS }}'
+              OPENAI_API_KEY='$OPENAI_API_KEY',
+              PINECONE_API_KEY='$PINECONE_API_KEY',
+              PINECONE_ENVIRONMENT='$PINECONE_ENVIRONMENT',
+              PINECONE_INDEX_NAME='$PINECONE_INDEX_NAME',
+              PINECONE_HOST='$PINECONE_HOST',
+              PINECONE_DIMENSIONS='$PINECONE_DIMENSIONS'
             }" \
             --region ${{ env.AWS_REGION }}
           echo "✅ Environment variables set for knowledgebot-chat"
@@ -351,12 +358,12 @@ jobs:
           aws lambda update-function-configuration \
             --function-name knowledgebot-document-ingestion \
             --environment "Variables={
-              PINECONE_API_KEY='${{ secrets.PINECONE_API_KEY }}',
-              PINECONE_ENVIRONMENT='${{ secrets.PINECONE_ENVIRONMENT }}',
-              PINECONE_INDEX_NAME='${{ secrets.PINECONE_INDEX_NAME }}',
-              PINECONE_HOST='${{ secrets.PINECONE_HOST }}',
-              PINECONE_DIMENSIONS='${{ secrets.PINECONE_DIMENSIONS }}',
-              DOCUMENTS_BUCKET='${{ secrets.DOCUMENTS_BUCKET }}'
+              PINECONE_API_KEY='$PINECONE_API_KEY',
+              PINECONE_ENVIRONMENT='$PINECONE_ENVIRONMENT',
+              PINECONE_INDEX_NAME='$PINECONE_INDEX_NAME',
+              PINECONE_HOST='$PINECONE_HOST',
+              PINECONE_DIMENSIONS='$PINECONE_DIMENSIONS',
+              DOCUMENTS_BUCKET='$DOCUMENTS_BUCKET'
             }" \
             --region ${{ env.AWS_REGION }}
           echo "✅ Environment variables set for knowledgebot-document-ingestion"
