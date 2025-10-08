@@ -1,0 +1,18 @@
+name: Test Simple Docker
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-simple-docker:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test simple Docker build
+      run: |
+        echo "Testing simple Docker build..."
+        docker build -f Dockerfile.basic-test -t test-simple .
+        echo "Simple Docker build successful!"
