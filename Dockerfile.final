@@ -39,9 +39,14 @@ RUN yum update -y && \
 # Install core Python dependencies
 RUN pip install --upgrade pip==24.0 setuptools wheel
 
-# Install all dependencies from requirements.txt
+# Pre-install NumPy to prevent upgrades during ML package installation
+RUN pip install --no-cache-dir numpy==1.26.4
+
+# Install all dependencies from requirements.txt with binary-only preference
 COPY agent-toolkit/requirements.txt ${LAMBDA_TASK_ROOT}/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefer-binary \
+    --only-binary=:all: \
+    -r requirements.txt
 
 # Pre-download models
 RUN python -c "\

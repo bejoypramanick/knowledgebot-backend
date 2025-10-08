@@ -39,6 +39,9 @@ RUN yum update -y && \
 # Install core Python dependencies
 RUN pip install --upgrade pip==24.0 setuptools wheel
 
+# Pre-install NumPy to prevent upgrades during ML package installation
+RUN pip install --no-cache-dir numpy==1.26.4
+
 # Basic dependencies
 RUN pip install --no-cache-dir \
     requests==2.31.0 \
@@ -46,8 +49,7 @@ RUN pip install --no-cache-dir \
     typing-extensions==4.8.0 \
     pydantic==2.5.0
 
-# Ensure NumPy is compatible with GCC 7
-RUN pip install --no-cache-dir numpy==1.26.4
+# Install pandas after NumPy is locked
 RUN pip install --no-cache-dir pandas==2.2.2
 
 # Install Docling and its dependencies
