@@ -1,0 +1,11 @@
+# Basic requirements without ML stack
+numpy==1.26.4
+requests==2.31.0
+boto3==1.34.0
+openai==1.12.0
+pinecone-client>=3.1.0
+neo4j>=5.24.0
+pandas>=2.2.2
+httpx==0.25.0
+orjson==3.9.10
+structlog==23.2.0
