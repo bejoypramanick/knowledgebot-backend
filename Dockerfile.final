@@ -42,7 +42,14 @@ RUN pip install --upgrade pip==24.0 setuptools wheel
 # Pre-install NumPy to prevent upgrades during ML package installation
 RUN pip install --no-cache-dir numpy==1.26.4
 
-# Install all dependencies from requirements.txt with binary preference
+# Install ML stack first (allow prebuilt wheels for Python 3.10)
+RUN pip install --no-cache-dir \
+    torch==2.1.0 \
+    transformers==4.36.0 \
+    sentence-transformers==2.2.2 \
+    tensorflow==2.20.0
+
+# Install remaining dependencies from requirements.txt
 # Allow agents to build from source if no wheel available
 COPY agent-toolkit/requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir --prefer-binary \

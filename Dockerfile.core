@@ -69,13 +69,12 @@ RUN pip install --no-cache-dir \
 # Install sentencepiece as precompiled wheel first
 RUN pip install --no-cache-dir sentencepiece==0.1.99
 
-# ML dependencies — use no-build-isolation to prevent NumPy 2.x upgrade
+# ML dependencies — allow prebuilt wheels for Python 3.10
 RUN pip install --no-cache-dir \
     torch==2.1.0 \
     transformers==4.36.0 \
     sentence-transformers==2.2.2 \
-    tensorflow==2.20.0 \
-    --no-build-isolation
+    tensorflow==2.20.0
 
 # Remaining dependencies
 RUN pip install --no-cache-dir \
