@@ -8,10 +8,14 @@ on:
   workflow_dispatch: # Allow manual trigger
 
 env:
-  AWS_REGION: ap-south-1
-  ECR_REPOSITORY: knowledgebot-backend
-  S3_BUCKET: chatbot-storage-ap-south-1
-  DYNAMODB_TABLE: chatbot-knowledge-base-metadata
+  AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || 'knowledgebot-backend' }}
+  S3_BUCKET: ${{ secrets.S3_BUCKET || 'chatbot-storage-ap-south-1' }}
+  DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE || 'chatbot-knowledge-base-metadata' }}
+  KNOWLEDGE_BASE_TABLE: ${{ secrets.KNOWLEDGE_BASE_TABLE || 'chatbot-knowledge-base' }}
+  CONVERSATIONS_TABLE: ${{ secrets.CONVERSATIONS_TABLE || 'chatbot-conversations' }}
+  DOCUMENTS_BUCKET: ${{ secrets.DOCUMENTS_BUCKET || 'chatbot-documents-ap-south-1' }}
+  EMBEDDINGS_BUCKET: ${{ secrets.EMBEDDINGS_BUCKET || 'chatbot-embeddings-ap-south-1' }}
 
 jobs:
   setup-infrastructure:
@@ -223,6 +227,29 @@ jobs:
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
         ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/chatbot-lambda-role"
         
+        # Create environment variables for Lambda
+        cat > lambda-env-vars.json << EOF
+        {
+          "Variables": {
+            "AWS_REGION": "${{ env.AWS_REGION }}",
+            "S3_BUCKET": "${{ env.S3_BUCKET }}",
+            "DYNAMODB_TABLE": "${{ env.DYNAMODB_TABLE }}",
+            "KNOWLEDGE_BASE_TABLE": "${{ env.KNOWLEDGE_BASE_TABLE }}",
+            "CONVERSATIONS_TABLE": "${{ env.CONVERSATIONS_TABLE }}",
+            "DOCUMENTS_BUCKET": "${{ env.DOCUMENTS_BUCKET }}",
+            "EMBEDDINGS_BUCKET": "${{ env.EMBEDDINGS_BUCKET }}",
+            "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
+            "CLAUDE_API_KEY": "${{ secrets.CLAUDE_API_KEY }}",
+            "PINECONE_API_KEY": "${{ secrets.PINECONE_API_KEY }}",
+            "PINECONE_ENVIRONMENT": "${{ secrets.PINECONE_ENVIRONMENT }}",
+            "PINECONE_INDEX_NAME": "${{ secrets.PINECONE_INDEX_NAME }}",
+            "NEO4J_URI": "${{ secrets.NEO4J_URI }}",
+            "NEO4J_USER": "${{ secrets.NEO4J_USER }}",
+            "NEO4J_PASSWORD": "${{ secrets.NEO4J_PASSWORD }}"
+          }
+        }
+        EOF
+
         # Create or update chat agent Lambda
         aws lambda create-function \
           --function-name chatbot-chat-agent \
@@ -231,11 +258,18 @@ jobs:
           --role $ROLE_ARN \
           --timeout 300 \
           --memory-size 1024 \
+          --environment file://lambda-env-vars.json \
           --region ${{ env.AWS_REGION }} || \
         aws lambda update-function-code \
           --function-name chatbot-chat-agent \
           --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
           --region ${{ env.AWS_REGION }}
+        
+        # Update chat agent environment variables
+        aws lambda update-function-configuration \
+          --function-name chatbot-chat-agent \
+          --environment file://lambda-env-vars.json \
+          --region ${{ env.AWS_REGION }} || echo "Environment update skipped"
         
         # Create or update document agent Lambda
         aws lambda create-function \
@@ -245,11 +279,18 @@ jobs:
           --role $ROLE_ARN \
           --timeout 300 \
           --memory-size 1024 \
+          --environment file://lambda-env-vars.json \
           --region ${{ env.AWS_REGION }} || \
         aws lambda update-function-code \
           --function-name chatbot-document-agent \
           --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
           --region ${{ env.AWS_REGION }}
+        
+        # Update document agent environment variables
+        aws lambda update-function-configuration \
+          --function-name chatbot-document-agent \
+          --environment file://lambda-env-vars.json \
+          --region ${{ env.AWS_REGION }} || echo "Environment update skipped"
 
     - name: Setup S3 notifications
       run: |
