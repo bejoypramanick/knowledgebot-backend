@@ -327,7 +327,42 @@ jobs:
           echo "⏭️ Skipping knowledgebot-document-ingestion deployment (no docling image)"
         fi
 
-        echo "✅ Lambda functions deployed successfully"
+        # Set environment variables for deployed functions
+        echo "🔧 Configuring environment variables..."
+
+        # Set environment variables for knowledgebot-chat
+        if [ "$FINAL_BUILT" = true ]; then
+          aws lambda update-function-configuration \
+            --function-name knowledgebot-chat \
+            --environment "Variables={
+              OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}',
+              PINECONE_API_KEY='${{ secrets.PINECONE_API_KEY }}',
+              PINECONE_ENVIRONMENT='${{ secrets.PINECONE_ENVIRONMENT }}',
+              PINECONE_INDEX_NAME='${{ secrets.PINECONE_INDEX_NAME }}',
+              PINECONE_HOST='${{ secrets.PINECONE_HOST }}',
+              PINECONE_DIMENSIONS='${{ secrets.PINECONE_DIMENSIONS }}'
+            }" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Environment variables set for knowledgebot-chat"
+        fi
+
+        # Set environment variables for knowledgebot-document-ingestion
+        if [ "$DOCLING_BUILT" = true ]; then
+          aws lambda update-function-configuration \
+            --function-name knowledgebot-document-ingestion \
+            --environment "Variables={
+              PINECONE_API_KEY='${{ secrets.PINECONE_API_KEY }}',
+              PINECONE_ENVIRONMENT='${{ secrets.PINECONE_ENVIRONMENT }}',
+              PINECONE_INDEX_NAME='${{ secrets.PINECONE_INDEX_NAME }}',
+              PINECONE_HOST='${{ secrets.PINECONE_HOST }}',
+              PINECONE_DIMENSIONS='${{ secrets.PINECONE_DIMENSIONS }}',
+              DOCUMENTS_BUCKET='${{ secrets.DOCUMENTS_BUCKET }}'
+            }" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Environment variables set for knowledgebot-document-ingestion"
+        fi
+
+        echo "✅ Lambda functions deployed and configured successfully"
 
     - name: Skip deployment
       if: steps.deploy-filter.outputs.deploy == 'false'
