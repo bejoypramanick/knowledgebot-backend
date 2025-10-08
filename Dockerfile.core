@@ -70,7 +70,7 @@ RUN pip install --no-cache-dir \
     structlog==23.2.0
 
 # Install agents separately to allow source build
-RUN pip install --no-cache-dir --no-binary agents agents==1.4.0
+# RUN pip install --no-cache-dir --no-binary agents agents==1.4.0  # Temporarily disabled
 
 # Pre-download sentence transformer model
 RUN python -c "\

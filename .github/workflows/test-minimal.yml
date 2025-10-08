@@ -1,0 +1,20 @@
+name: Test Minimal Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-minimal:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test minimal Docker build
+      run: |
+        echo "Testing minimal Docker build..."
+        docker build -f Dockerfile.minimal -t test-minimal .
+        echo "Minimal build successful!"
