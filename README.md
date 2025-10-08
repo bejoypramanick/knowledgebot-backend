@@ -27,7 +27,6 @@ knowledgebot-backend/
 │   ├── unified_ai_agent.py     # Unified AI agent with CRUD tools
 │   ├── lambda_handlers.py      # Lambda function handlers
 │   ├── crud_operations.py      # Pure CRUD operations
-│   ├── deploy_agents.sh        # Deployment script
 │   ├── requirements.txt        # Python dependencies
 │   ├── Dockerfile              # Container configuration
 │   └── *.md                    # Documentation
@@ -35,8 +34,8 @@ knowledgebot-backend/
 │   └── shared/                 # Shared utilities
 │       └── error_handler.py
 ├── base-images/                # Docker base images
-├── build_base_images.sh        # Base image build script
-├── build_state.json           # Build state tracking
+├── .github/workflows/          # GitHub Actions CI/CD
+│   └── deploy.yml              # Complete deployment & setup workflow
 ├── requirements.txt           # Main dependencies
 ├── Dockerfile                 # Main container configuration
 └── README.md                  # This file
@@ -48,6 +47,36 @@ knowledgebot-backend/
 
 1. **AWS Account** with appropriate permissions
 2. **OpenAI API Key** with GPT-4 access
+3. **GitHub Repository** with AWS credentials configured
+
+## 🔄 GitHub Actions Deployment
+
+Everything is automated through GitHub Actions! The workflow handles:
+
+### **Infrastructure Setup** (One-time)
+- ✅ **S3 Bucket** creation with CORS configuration
+- ✅ **DynamoDB Table** for metadata storage
+- ✅ **IAM Roles** and policies for Lambda functions
+- ✅ **ECR Repository** for Docker images
+
+### **Deployment** (Every push to main)
+- ✅ **Docker Build** and push to ECR
+- ✅ **Lambda Functions** creation/update
+- ✅ **S3 Notifications** configuration
+- ✅ **Database Seeding** with sample data
+
+### **Manual Setup** (First time only)
+1. **Configure GitHub Secrets:**
+   - `AWS_ROLE_ARN` - Your AWS IAM role for GitHub Actions
+   
+2. **Trigger Setup:**
+   - Go to Actions tab → "Deploy KnowledgeBot Backend"
+   - Click "Run workflow" → "Run workflow"
+   - This will create all AWS infrastructure
+
+3. **Automatic Deployment:**
+   - Every push to `main` branch triggers deployment
+   - Pull requests trigger validation (no deployment)
 3. **Pinecone Account** (optional - for vector search)
 4. **Neo4j AuraDB Account** (optional - for knowledge graph)
 5. **DynamoDB Tables** (for data storage)
