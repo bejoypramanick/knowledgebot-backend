@@ -59,6 +59,20 @@ RUN pip install --no-cache-dir docling>=1.2.3
 RUN pip install --no-cache-dir sentencepiece==0.1.99
 
 # ML dependencies for Docling — allow prebuilt wheels for Python 3.10
+# Install GCC 10 for C++20 support (required for ml_dtypes and optree)
+RUN yum update -y && \
+    yum install -y \
+        gcc10 \
+        gcc10-c++ \
+        make \
+        cmake \
+    && \
+    yum clean all
+
+# Set environment variables to use GCC 10
+ENV CC=/usr/bin/gcc10
+ENV CXX=/usr/bin/g++10
+
 RUN pip install --no-cache-dir \
     torch==2.1.0 \
     transformers==4.36.0 \
