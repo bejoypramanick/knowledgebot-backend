@@ -1,6 +1,6 @@
 # Dockerfile.final
 # Complete application: Python 3.12 Lambda base with full ML stack and Docling
-FROM public.ecr.aws/lambda/python:3.12
+FROM public.ecr.aws/lambda/python:3.11
 
 LABEL maintainer="KnowledgeBot Team"
 ENV LANG=C.UTF-8
@@ -69,6 +69,6 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
 # Set the CMD to your main handler
-CMD ["test_handler", "lambda_handler"]
+CMD ["test_handler.lambda_handler"]
 # Trigger full deployment
 # Trigger fresh build with current code
