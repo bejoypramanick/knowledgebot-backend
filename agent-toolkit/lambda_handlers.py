@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Lambda Handlers with CRUD Tools Only
 All business logic and formatting handled by AgentBuilder model
