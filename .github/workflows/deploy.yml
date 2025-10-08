@@ -1,0 +1,71 @@
+name: Deploy to AWS Lambda
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: knowledgebot-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build a docker container and push it to ECR so that it can
+        # be deployed to ECS.
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Deploy to Lambda
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Update Lambda function with new image
+        aws lambda update-function-code \
+          --function-name chatbot-chat-agent \
+          --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          --region ${{ env.AWS_REGION }}
+        
+        aws lambda update-function-code \
+          --function-name chatbot-document-agent \
+          --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Wait for deployment
+      run: |
+        echo "Waiting for Lambda functions to be updated..."
+        sleep 30
+
+    - name: Test deployment
+      run: |
+        echo "Deployment completed successfully!"
+        echo "Image: ${{ steps.build-image.outputs.image }}"

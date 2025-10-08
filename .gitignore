@@ -64,6 +64,7 @@ tmp/
 *.zip
 *.tar.gz
 *.tar.bz2
+buildspec.yml
 
 # Environment variables
 .env.local

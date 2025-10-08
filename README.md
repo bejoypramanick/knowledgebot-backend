@@ -23,22 +23,23 @@ S3 Upload → chatbot-document-agent → AI Agent → CRUD Tools → Knowledge B
 
 ```
 knowledgebot-backend/
-├── backend/
-│   ├── agent-toolkit/           # Main agent implementation
-│   │   ├── unified_ai_agent.py  # Unified AI agent with CRUD tools
-│   │   ├── lambda_handlers.py   # Lambda function handlers
-│   │   ├── crud_operations.py   # Pure CRUD operations
-│   │   ├── deploy_agents.sh     # Deployment script
-│   │   ├── requirements.txt     # Python dependencies
-│   │   ├── Dockerfile           # Container configuration
-│   │   └── *.md                 # Documentation
-│   ├── lambda/
-│   │   └── shared/              # Shared utilities
-│   │       └── error_handler.py
-│   └── [other backend files]
-├── build_base_images.sh         # Base image build script
-├── build_state.json            # Build state tracking
-└── README.md                   # This file
+├── agent-toolkit/              # Main agent implementation
+│   ├── unified_ai_agent.py     # Unified AI agent with CRUD tools
+│   ├── lambda_handlers.py      # Lambda function handlers
+│   ├── crud_operations.py      # Pure CRUD operations
+│   ├── deploy_agents.sh        # Deployment script
+│   ├── requirements.txt        # Python dependencies
+│   ├── Dockerfile              # Container configuration
+│   └── *.md                    # Documentation
+├── lambda/
+│   └── shared/                 # Shared utilities
+│       └── error_handler.py
+├── base-images/                # Docker base images
+├── build_base_images.sh        # Base image build script
+├── build_state.json           # Build state tracking
+├── requirements.txt           # Main dependencies
+├── Dockerfile                 # Main container configuration
+└── README.md                  # This file
 ```
 
 ## 🚀 Quick Start
@@ -69,7 +70,7 @@ export KNOWLEDGE_BASE_TABLE="your-knowledge-table"
 ### Step 2: Deploy the Agents
 
 ```bash
-cd backend/agent-toolkit
+cd agent-toolkit
 ./deploy_agents.sh
 ```
 
