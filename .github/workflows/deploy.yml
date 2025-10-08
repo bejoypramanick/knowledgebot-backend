@@ -216,9 +216,9 @@ jobs:
     if: |
       always() &&
       (needs.setup-infrastructure.result == 'success' || needs.setup-infrastructure.result == 'skipped') &&
-      (needs.build-core.result == 'success' || needs.build-core.result == 'skipped' ||
-       needs.build-docling.result == 'success' || needs.build-docling.result == 'skipped' ||
-       needs.build-final.result == 'success' || needs.build-final.result == 'skipped')
+      (needs.build-core.result == 'success' ||
+       needs.build-docling.result == 'success' ||
+       needs.build-final.result == 'success')
     environment: chatbot
 
     permissions:
@@ -261,44 +261,70 @@ jobs:
       run: |
         echo "🚀 Deploying Lambda functions..."
 
-        # Function: knowledgebot-chat (Main chat functionality)
-        if aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
-          echo "📝 Updating existing knowledgebot-chat function..."
-          aws lambda update-function-code \
-            --function-name knowledgebot-chat \
-            --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
-            --region ${{ env.AWS_REGION }}
+        # Check which images were built
+        FINAL_BUILT=false
+        DOCLING_BUILT=false
+
+        if aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --image-ids imageTag=final-$IMAGE_TAG --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+          FINAL_BUILT=true
+          echo "✅ Final image found: final-$IMAGE_TAG"
         else
-          echo "🆕 Creating knowledgebot-chat function..."
-          aws lambda create-function \
-            --function-name knowledgebot-chat \
-            --package-type Image \
-            --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
-            --architectures arm64 \
-            --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
-            --region ${{ env.AWS_REGION }} \
-            --timeout 300 \
-            --memory-size 2048
+          echo "⏭️ Final image not found: final-$IMAGE_TAG"
         fi
 
-        # Function: knowledgebot-document-ingestion (Document processing)
-        if aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
-          echo "📝 Updating existing knowledgebot-document-ingestion function..."
-          aws lambda update-function-code \
-            --function-name knowledgebot-document-ingestion \
-            --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
-            --region ${{ env.AWS_REGION }}
+        if aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --image-ids imageTag=docling-$IMAGE_TAG --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+          DOCLING_BUILT=true
+          echo "✅ Docling image found: docling-$IMAGE_TAG"
         else
-          echo "🆕 Creating knowledgebot-document-ingestion function..."
-          aws lambda create-function \
-            --function-name knowledgebot-document-ingestion \
-            --package-type Image \
-            --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
-            --architectures arm64 \
-            --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
-            --region ${{ env.AWS_REGION }} \
-            --timeout 900 \
-            --memory-size 3008
+          echo "⏭️ Docling image not found: docling-$IMAGE_TAG"
+        fi
+
+        # Deploy knowledgebot-chat if final image was built
+        if [ "$FINAL_BUILT" = true ]; then
+          if aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "📝 Updating existing knowledgebot-chat function..."
+            aws lambda update-function-code \
+              --function-name knowledgebot-chat \
+              --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
+              --region ${{ env.AWS_REGION }}
+          else
+            echo "🆕 Creating knowledgebot-chat function..."
+            aws lambda create-function \
+              --function-name knowledgebot-chat \
+              --package-type Image \
+              --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG \
+              --architectures arm64 \
+              --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
+              --region ${{ env.AWS_REGION }} \
+              --timeout 300 \
+              --memory-size 2048
+          fi
+        else
+          echo "⏭️ Skipping knowledgebot-chat deployment (no final image)"
+        fi
+
+        # Deploy knowledgebot-document-ingestion if docling image was built
+        if [ "$DOCLING_BUILT" = true ]; then
+          if aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "📝 Updating existing knowledgebot-document-ingestion function..."
+            aws lambda update-function-code \
+              --function-name knowledgebot-document-ingestion \
+              --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
+              --region ${{ env.AWS_REGION }}
+          else
+            echo "🆕 Creating knowledgebot-document-ingestion function..."
+            aws lambda create-function \
+              --function-name knowledgebot-document-ingestion \
+              --package-type Image \
+              --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG \
+              --architectures arm64 \
+              --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
+              --region ${{ env.AWS_REGION }} \
+              --timeout 900 \
+              --memory-size 3008
+          fi
+        else
+          echo "⏭️ Skipping knowledgebot-document-ingestion deployment (no docling image)"
         fi
 
         echo "✅ Lambda functions deployed successfully"
