@@ -281,8 +281,8 @@ jobs:
           echo "✅ Final image found: final-$IMAGE_TAG"
         else
           # Look for latest final image
-          LATEST_FINAL=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageDetails[?contains(imageTags, `final`)].imageTags[0]' --output text | head -1)
-          if [ "$LATEST_FINAL" != "None" ] && [ -n "$LATEST_FINAL" ]; then
+          LATEST_FINAL=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageDetails[].imageTags[]' --output text | tr '\t' '\n' | grep final | head -1)
+          if [ -n "$LATEST_FINAL" ]; then
             FINAL_BUILT=true
             FINAL_IMAGE_TAG="$LATEST_FINAL"
             echo "✅ Using latest final image: $LATEST_FINAL"
@@ -298,8 +298,8 @@ jobs:
           echo "✅ Docling image found: docling-$IMAGE_TAG"
         else
           # Look for latest docling image
-          LATEST_DOCLING=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageDetails[?contains(imageTags, `docling`)].imageTags[0]' --output text | head -1)
-          if [ "$LATEST_DOCLING" != "None" ] && [ -n "$LATEST_DOCLING" ]; then
+          LATEST_DOCLING=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageDetails[].imageTags[]' --output text | tr '\t' '\n' | grep docling | head -1)
+          if [ -n "$LATEST_DOCLING" ]; then
             DOCLING_BUILT=true
             DOCLING_IMAGE_TAG="$LATEST_DOCLING"
             echo "✅ Using latest docling image: $LATEST_DOCLING"
