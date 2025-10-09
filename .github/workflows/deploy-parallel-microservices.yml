@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         include:
-          # Base Layers
+          # Base Layers (all independent now)
           - type: layer
             name: base-layer
             dockerfile: layers/Dockerfile.base-layer

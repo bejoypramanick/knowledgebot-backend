@@ -3,7 +3,20 @@
 # Target size: ~150MB
 # Reusable by: ML, Heavy layers
 
-FROM knowledgebot-core-layer:latest
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install base dependencies
+RUN python -m pip install --no-cache-dir \
+    pydantic>=2.12.0 \
+    typing-extensions>=4.9.0 \
+    orjson>=3.9.0
+
+# Install AWS SDK and HTTP clients
+RUN python -m pip install --no-cache-dir \
+    boto3>=1.34.0 \
+    botocore>=1.34.0 \
+    httpx>=0.25.0 \
+    requests>=2.31.0
 
 # Install database clients
 RUN python -m pip install --no-cache-dir \

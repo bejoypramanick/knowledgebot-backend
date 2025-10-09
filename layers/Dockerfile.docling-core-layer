@@ -3,7 +3,20 @@
 # Target size: ~500MB
 # Used by: Basic document processing services
 
-FROM knowledgebot-ml-layer:latest
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install base dependencies
+RUN python -m pip install --no-cache-dir \
+    pydantic>=2.12.0 \
+    typing-extensions>=4.9.0 \
+    orjson>=3.9.0 \
+    numpy>=1.26.0,<2.0.0 \
+    pandas>=2.2.0
+
+# Install ML dependencies
+RUN python -m pip install --no-cache-dir \
+    torch>=2.1.0 \
+    transformers>=4.36.0
 
 # Install Docling core dependencies
 RUN python -m pip install --no-cache-dir \

@@ -3,7 +3,22 @@
 # Target size: ~400MB
 # Used by: Table detection services
 
-FROM knowledgebot-ml-layer:latest
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install base dependencies
+RUN python -m pip install --no-cache-dir \
+    pydantic>=2.12.0 \
+    typing-extensions>=4.9.0 \
+    orjson>=3.9.0 \
+    numpy>=1.26.0,<2.0.0 \
+    pandas>=2.2.0
+
+# Install ML dependencies
+RUN python -m pip install --no-cache-dir \
+    torch>=2.1.0 \
+    torchvision>=0.16.0 \
+    transformers>=4.36.0 \
+    tensorflow>=2.14.0
 
 # Install table detection dependencies
 RUN python -m pip install --no-cache-dir \
