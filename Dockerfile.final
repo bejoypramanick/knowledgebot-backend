@@ -59,3 +59,4 @@ RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 CMD ["lambda_handlers.lambda_handler"]
 # Trigger full deployment
 # Trigger fresh build with current code
+# Fresh deployment triggered after ECR cleanup - $(date)
