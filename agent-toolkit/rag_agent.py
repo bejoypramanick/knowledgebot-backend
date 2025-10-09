@@ -22,8 +22,8 @@ logger.info("✅ Imported agents modules: function_tool, Agent, ModelSettings, T
 from openai.types.shared.reasoning import Reasoning
 logger.info("✅ Imported openai.types.shared.reasoning.Reasoning")
 
-from pydantic import BaseModel, Field
-logger.info("✅ Imported pydantic.BaseModel, Field")
+from pydantic import BaseModel, Field, ConfigDict
+logger.info("✅ Imported pydantic.BaseModel, Field, ConfigDict")
 
 from typing import List, Dict, Any, Optional, Union
 logger.info("✅ Imported typing.List, Dict, Any, Optional")
@@ -70,20 +70,26 @@ logger.info("✅ Imported rag_operations modules")
 
 class GenericResponse(BaseModel):
     """Generic response model for function tools"""
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
+    
     success: bool = Field(description="Whether the operation was successful")
-    data: Optional[Dict[str, Union[str, int, float, bool]]] = Field(default=None, description="Response data")
+    data: Optional[Any] = Field(default=None, description="Response data")
     error: Optional[str] = Field(default=None, description="Error message if any")
     message: Optional[str] = Field(default=None, description="Additional message")
 
 class SearchPineconeRequest(BaseModel):
     """Request model for Pinecone search"""
+    model_config = ConfigDict(extra='allow')
+    
     query_vector: List[float] = Field(description="Query vector for search")
     limit: int = Field(default=10, description="Maximum number of results")
 
 class SearchNeo4jRequest(BaseModel):
     """Request model for Neo4j search"""
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
+    
     cypher_query: str = Field(description="Cypher query to execute")
-    parameters: Optional[Dict[str, Union[str, int, float, bool]]] = Field(default=None, description="Query parameters")
+    parameters: Optional[Any] = Field(default=None, description="Query parameters")
 
 class DynamoDBKeyRequest(BaseModel):
     """Request model for DynamoDB operations with key"""
