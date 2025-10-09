@@ -19,7 +19,7 @@ from pathlib import Path
 from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.datamodel.document import Document
+from docling.datamodel.document import DsDocument
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 
 # Configure logging
@@ -191,7 +191,7 @@ class DoclingProcessor:
             # Fallback to filename-based ID
             return hashlib.md5(document_path.encode()).hexdigest()[:16]
     
-    def _extract_document_metadata(self, doc: Document, document_id: str) -> Dict[str, Any]:
+    def _extract_document_metadata(self, doc: DsDocument, document_id: str) -> Dict[str, Any]:
         """Extract metadata from Docling document"""
         try:
             metadata = {
@@ -209,7 +209,7 @@ class DoclingProcessor:
             logger.warning(f"Failed to extract document metadata: {e}")
             return {'document_id': document_id, 'document_type': 'unknown'}
     
-    def _create_hierarchical_chunks(self, doc: Document, document_id: str) -> List[Dict[str, Any]]:
+    def _create_hierarchical_chunks(self, doc: DsDocument, document_id: str) -> List[Dict[str, Any]]:
         """
         Create hierarchical semantic chunks from Docling document
         
@@ -343,7 +343,7 @@ class DoclingProcessor:
         else:  # H3+
             return f"{current_path} > {element_text[:20]}"
     
-    def _create_docling_default_chunks(self, doc: Document, document_id: str) -> List[Dict[str, Any]]:
+    def _create_docling_default_chunks(self, doc: DsDocument, document_id: str) -> List[Dict[str, Any]]:
         """
         Create chunks using Docling's built-in default chunking strategy
         This uses Docling's native chunking when hierarchical chunking fails
