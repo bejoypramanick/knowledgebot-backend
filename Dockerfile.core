@@ -50,6 +50,21 @@ RUN python -m pip install --no-cache-dir \
     "pydantic>=2.5.0" \
     "typing-extensions>=4.9.0"
 
+# Install ML and document processing packages
+RUN python -m pip install --no-cache-dir \
+    "torch>=2.1.0" \
+    "transformers>=4.36.0" \
+    "sentence-transformers>=2.2.2" \
+    "numpy>=1.26.0,<2.0.0" \
+    "tensorflow>=2.14.0" \
+    "pandas>=2.2.0" \
+    "requests>=2.31.0"
+
+# Install docling with PyTorch CPU support
+RUN python -m pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    "docling>=2.25.0"
+
 # Copy application code
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 
