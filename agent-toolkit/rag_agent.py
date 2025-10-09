@@ -19,6 +19,10 @@ logger.info("✅ Configured logging in rag_agent")
 from agents import function_tool, Agent, Runner
 logger.info("✅ Imported agents modules: function_tool, Agent, Runner")
 
+# Try to disable strict schema validation
+import os
+os.environ["AGENTS_STRICT_SCHEMA"] = "false"
+
 from pydantic import BaseModel
 logger.info("✅ Imported pydantic.BaseModel")
 
