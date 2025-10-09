@@ -122,66 +122,77 @@ jobs:
             size: "~55MB"
             memory: 256
             timeout: 30
+            env_vars: "DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},AWS_REGION=${{ env.AWS_REGION }}"
           - name: s3-reader
             dockerfile: Dockerfile.s3-reader-layered
             base_layer: core-layer
             size: "~85MB"
             memory: 256
             timeout: 30
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
           - name: pinecone-search
             dockerfile: Dockerfile.pinecone-search-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
+            env_vars: "PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},AWS_REGION=${{ env.AWS_REGION }}"
           - name: pinecone-upsert
             dockerfile: Dockerfile.pinecone-upsert-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
+            env_vars: "PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},AWS_REGION=${{ env.AWS_REGION }}"
           - name: neo4j-search
             dockerfile: Dockerfile.neo4j-search-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
+            env_vars: "NEO4J_URI=${{ secrets.NEO4J_URI }},NEO4J_USER=${{ secrets.NEO4J_USER }},NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},AWS_REGION=${{ env.AWS_REGION }}"
           - name: neo4j-write
             dockerfile: Dockerfile.neo4j-write-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
+            env_vars: "NEO4J_URI=${{ secrets.NEO4J_URI }},NEO4J_USER=${{ secrets.NEO4J_USER }},NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},AWS_REGION=${{ env.AWS_REGION }}"
           - name: dynamodb-crud
             dockerfile: Dockerfile.dynamodb-crud-layered
             base_layer: core-layer
             size: "~85MB"
             memory: 256
             timeout: 30
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
           - name: text-chunker
             dockerfile: Dockerfile.text-chunker-layered
             base_layer: base-layer
             size: "~55MB"
             memory: 256
             timeout: 30
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
           - name: embedding-generator
             dockerfile: Dockerfile.embedding-generator-layered
             base_layer: ml-layer
             size: "~405MB"
             memory: 1024
             timeout: 120
+            env_vars: "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},EMBEDDING_TYPE=${{ secrets.EMBEDDING_TYPE }},EMBEDDING_MODEL=${{ secrets.EMBEDDING_MODEL }},AWS_REGION=${{ env.AWS_REGION }}"
           - name: rag-search
             dockerfile: Dockerfile.rag-search-layered
             base_layer: ml-layer
             size: "~405MB"
             memory: 1024
             timeout: 180
+            env_vars: "EMBEDDING_SERVICE_URL=${{ secrets.EMBEDDING_SERVICE_URL }},PINECONE_SERVICE_URL=${{ secrets.PINECONE_SERVICE_URL }},NEO4J_SERVICE_URL=${{ secrets.NEO4J_SERVICE_URL }},DYNAMODB_SERVICE_URL=${{ secrets.DYNAMODB_SERVICE_URL }},AWS_REGION=${{ env.AWS_REGION }}"
           - name: chat-generator
             dockerfile: Dockerfile.chat-generator-layered
             base_layer: ml-layer
             size: "~405MB"
             memory: 1024
             timeout: 300
+            env_vars: "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},RAG_SEARCH_SERVICE_URL=${{ secrets.RAG_SEARCH_SERVICE_URL }},AWS_REGION=${{ env.AWS_REGION }}"
           
           # Granular OCR Micro-Services
           - name: pdf-processor
@@ -190,30 +201,35 @@ jobs:
             size: "~255MB"
             memory: 1024
             timeout: 120
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
           - name: easyocr
             dockerfile: Dockerfile.easyocr-layered
             base_layer: easyocr-layer
             size: "~355MB"
             memory: 1024
             timeout: 180
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
           - name: table-detector
             dockerfile: Dockerfile.table-detector-layered
             base_layer: table-detector-layer
             size: "~455MB"
             memory: 1024
             timeout: 240
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
           - name: docling-core
             dockerfile: Dockerfile.docling-core-layered
             base_layer: docling-core-layer
             size: "~555MB"
             memory: 1024
             timeout: 300
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
           - name: docling-full
             dockerfile: Dockerfile.docling-full-layered
             base_layer: docling-full-layer
             size: "~1.25GB"
             memory: 2048
             timeout: 900
+            env_vars: "AWS_REGION=${{ env.AWS_REGION }}"
     
     steps:
     - name: Checkout code
@@ -312,17 +328,7 @@ jobs:
             --function-name knowledgebot-${{ matrix.name }} \
             --memory-size ${{ matrix.memory }} \
             --timeout ${{ matrix.timeout }} \
-            --environment Variables="{
-              PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},
-              PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},
-              PINECONE_HOST=${{ secrets.PINECONE_HOST }},
-              PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},
-              OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
-              NEO4J_URI=${{ secrets.NEO4J_URI }},
-              NEO4J_USER=${{ secrets.NEO4J_USER }},
-              NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},
-              AWS_REGION=${{ env.AWS_REGION }}
-            }"
+            --environment Variables="{${{ matrix.env_vars }}}"
         else
           echo "🆕 Creating new microservice: knowledgebot-${{ matrix.name }}"
           
@@ -334,17 +340,7 @@ jobs:
             --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
             --memory-size ${{ matrix.memory }} \
             --timeout ${{ matrix.timeout }} \
-            --environment Variables="{
-              PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},
-              PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},
-              PINECONE_HOST=${{ secrets.PINECONE_HOST }},
-              PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},
-              OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
-              NEO4J_URI=${{ secrets.NEO4J_URI }},
-              NEO4J_USER=${{ secrets.NEO4J_USER }},
-              NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},
-              AWS_REGION=${{ env.AWS_REGION }}
-            }"
+            --environment Variables="{${{ matrix.env_vars }}}"
         fi
         
         echo "✅ Deployed knowledgebot-${{ matrix.name }} successfully"

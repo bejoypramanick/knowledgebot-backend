@@ -5,40 +5,9 @@
 
 FROM public.ecr.aws/lambda/python:3.12
 
-# Install base dependencies
-RUN python -m pip install --no-cache-dir \
-    "pydantic>=2.12.0" \
-    "typing-extensions>=4.9.0" \
-    "orjson>=3.9.0" \
-    "numpy>=1.26.0,<2.0.0" \
-    pandas>=2.2.0
-
-# Install ML dependencies
-RUN python -m pip install --no-cache-dir \
-    torch>=2.1.0 \
-    torchvision>=0.16.0 \
-    transformers>=4.36.0 \
-    sentence-transformers>=2.2.2 \
-    tensorflow>=2.14.0
-
-# Install complete Docling dependencies
-RUN python -m pip install --no-cache-dir \
-    docling>=2.25.0 \
-    easyocr>=1.7.0 \
-    opencv-python>=4.8.0 \
-    pillow>=10.0.0 \
-    pytesseract>=0.3.10 \
-    pypdfium2>=4.0.0 \
-    pdfplumber>=0.10.0 \
-    pymupdf>=1.23.0 \
-    python-docx>=0.8.11 \
-    python-pptx>=0.6.21 \
-    beautifulsoup4>=4.12.0 \
-    lxml>=4.9.0 \
-    nltk>=3.8.0 \
-    spacy>=3.7.0 \
-    scikit-image>=0.21.0 \
-    matplotlib>=3.7.0
+# Copy and install requirements
+COPY requirements-docling-full-layer.txt ${LAMBDA_TASK_ROOT}/
+RUN python -m pip install --no-cache-dir -r requirements-docling-full-layer.txt
 
 # Create a marker file to identify this layer
 RUN echo "knowledgebot-docling-full-layer-$(date +%s)" > /tmp/layer-marker

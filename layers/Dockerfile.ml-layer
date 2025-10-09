@@ -5,32 +5,9 @@
 
 FROM public.ecr.aws/lambda/python:3.12
 
-# Install base dependencies
-RUN python -m pip install --no-cache-dir \
-    pydantic>=2.12.0 \
-    typing-extensions>=4.9.0 \
-    orjson>=3.9.0
-
-# Install AWS SDK and HTTP clients
-RUN python -m pip install --no-cache-dir \
-    boto3>=1.34.0 \
-    botocore>=1.34.0 \
-    httpx>=0.25.0 \
-    requests>=2.31.0
-
-# Install database clients
-RUN python -m pip install --no-cache-dir \
-    pinecone>=3.1.0 \
-    neo4j>=5.24.0 \
-    pandas>=2.2.0
-
-# Install ML libraries
-RUN python -m pip install --no-cache-dir \
-    "openai>=1.107.1,<2.0.0" \
-    openai-agents>=0.3.3 \
-    sentence-transformers>=2.2.2 \
-    torch>=2.1.0 \
-    "numpy>=1.26.0,<2.0.0"
+# Copy and install requirements
+COPY requirements-ml-layer.txt ${LAMBDA_TASK_ROOT}/
+RUN python -m pip install --no-cache-dir -r requirements-ml-layer.txt
 
 # Create a marker file to identify this layer
 RUN echo "knowledgebot-ml-layer-$(date +%s)" > /tmp/layer-marker

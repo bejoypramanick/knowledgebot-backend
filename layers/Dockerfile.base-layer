@@ -13,11 +13,9 @@ ENV LC_ALL=C.UTF-8
 # Upgrade pip and install basic utilities
 RUN python -m pip install --upgrade pip setuptools wheel
 
-# Install only essential Python packages
-RUN python -m pip install --no-cache-dir \
-    pydantic>=2.12.0 \
-    typing-extensions>=4.9.0 \
-    orjson>=3.9.0
+# Copy and install requirements
+COPY requirements-base-layer.txt ${LAMBDA_TASK_ROOT}/
+RUN python -m pip install --no-cache-dir -r requirements-base-layer.txt
 
 # Create a marker file to identify this layer
 RUN echo "knowledgebot-base-layer-$(date +%s)" > /tmp/layer-marker

@@ -5,23 +5,9 @@
 
 FROM public.ecr.aws/lambda/python:3.12
 
-# Install base dependencies
-RUN python -m pip install --no-cache-dir \
-    "pydantic>=2.12.0" \
-    "typing-extensions>=4.9.0" \
-    "orjson>=3.9.0" \
-    "numpy>=1.26.0,<2.0.0"
-
-# Install ML dependencies
-RUN python -m pip install --no-cache-dir \
-    torch>=2.1.0 \
-    transformers>=4.36.0
-
-# Install PDF processing dependencies
-RUN python -m pip install --no-cache-dir \
-    pypdfium2>=4.0.0 \
-    pdfplumber>=0.10.0 \
-    pymupdf>=1.23.0
+# Copy and install requirements
+COPY requirements-pdf-processor-layer.txt ${LAMBDA_TASK_ROOT}/
+RUN python -m pip install --no-cache-dir -r requirements-pdf-processor-layer.txt
 
 # Create a marker file to identify this layer
 RUN echo "knowledgebot-pdf-processor-layer-$(date +%s)" > /tmp/layer-marker
