@@ -31,12 +31,25 @@ try:
     _pinecone_dimensions = int(os.environ.get('PINECONE_DIMENSIONS', '1536'))
     _pinecone_metric = os.environ.get('PINECONE_METRIC', 'cosine')
     
-    # Initialize Neo4j (Required)
-    from neo4j import GraphDatabase
-    _neo4j_driver = GraphDatabase.driver(
-        os.environ.get('NEO4J_URI'),
-        auth=(os.environ.get('NEO4J_USER'), os.environ.get('NEO4J_PASSWORD'))
-    )
+    # Initialize Neo4j (Optional - only if environment variables are available)
+    _neo4j_driver = None
+    neo4j_uri = os.environ.get('NEO4J_URI')
+    neo4j_user = os.environ.get('NEO4J_USER')
+    neo4j_password = os.environ.get('NEO4J_PASSWORD')
+    
+    if neo4j_uri and neo4j_user and neo4j_password:
+        try:
+            from neo4j import GraphDatabase
+            _neo4j_driver = GraphDatabase.driver(
+                neo4j_uri,
+                auth=(neo4j_user, neo4j_password)
+            )
+            logger.info("✅ Neo4j driver initialized successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Neo4j initialization failed: {e}")
+            _neo4j_driver = None
+    else:
+        logger.warning("⚠️ Neo4j environment variables not available - Neo4j operations will be disabled")
     
     # Initialize embedding model (sentence transformers by default)
     try:
@@ -167,6 +180,12 @@ def search_neo4j_crud(cypher_query: str, parameters: Dict[str, Any] = None) -> D
         Raw Neo4j query results
     """
     try:
+        if _neo4j_driver is None:
+            return {
+                "success": False,
+                "error": "Neo4j driver not initialized - environment variables not available",
+                "results": []
+            }
         
         with _neo4j_driver.session() as session:
             result = session.run(cypher_query, parameters or {})
@@ -490,6 +509,12 @@ def execute_neo4j_write_crud(cypher_query: str, parameters: Dict[str, Any] = Non
         Write result or error
     """
     try:
+        if _neo4j_driver is None:
+            return {
+                "success": False,
+                "error": "Neo4j driver not initialized - environment variables not available",
+                "results": []
+            }
         
         with _neo4j_driver.session() as session:
             result = session.run(cypher_query, parameters or {})
