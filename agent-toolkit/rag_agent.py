@@ -16,8 +16,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("✅ Configured logging in rag_agent")
 
-from openai_agents import function_tool, Agent, Runner
-logger.info("✅ Imported openai_agents modules: function_tool, Agent, Runner")
+from openai import OpenAI
+client = OpenAI()
+logger.info("✅ Imported OpenAI client")
 
 from pydantic import BaseModel
 logger.info("✅ Imported pydantic.BaseModel")
@@ -65,62 +66,50 @@ logger.info("✅ Imported rag_operations modules")
 # CRUD TOOLS ONLY - NO BUSINESS LOGIC
 # ============================================================================
 
-@function_tool
 def read_s3_data_tool(bucket: str, key: str) -> Dict[str, Any]:
     """CRUD: Read data from S3 bucket"""
     return read_s3_data_crud(bucket, key)
 
-@function_tool
 def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> Dict[str, Any]:
     """CRUD: Search Pinecone vector database"""
     return search_pinecone_crud(query_vector, limit)
 
-@function_tool
 def search_neo4j_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
     """CRUD: Execute Cypher query in Neo4j"""
     return search_neo4j_crud(cypher_query, parameters)
 
-@function_tool
 def read_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Read item from DynamoDB table"""
     return read_dynamodb_crud(table_name, key)
 
-@function_tool
 def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, Any]]) -> Dict[str, Any]:
     """CRUD: Batch read items from DynamoDB table"""
     return batch_read_dynamodb_crud(table_name, keys)
 
-@function_tool
 def write_dynamodb_tool(table_name: str, item: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Write item to DynamoDB table"""
     return write_dynamodb_crud(table_name, item)
 
-@function_tool
 def update_dynamodb_tool(table_name: str, key: Dict[str, Any], update_expression: str, expression_values: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Update item in DynamoDB table"""
     return update_dynamodb_crud(table_name, key, update_expression, expression_values)
 
-@function_tool
 def delete_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Delete item from DynamoDB table"""
     return delete_dynamodb_crud(table_name, key)
 
-@function_tool
 def generate_embedding_tool(text: str) -> Dict[str, Any]:
     """CRUD: Generate embedding vector for text"""
     return generate_embedding_crud(text)
 
-@function_tool
 def upsert_pinecone_tool(vectors: List[Dict[str, Any]], namespace: str = None) -> Dict[str, Any]:
     """CRUD: Upsert vectors to Pinecone"""
     return upsert_pinecone_crud(vectors, namespace)
 
-@function_tool
 def delete_pinecone_tool(ids: List[str], namespace: str = None) -> Dict[str, Any]:
     """CRUD: Delete vectors from Pinecone"""
     return delete_pinecone_crud(ids, namespace)
 
-@function_tool
 def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
     """CRUD: Execute write Cypher query in Neo4j"""
     return execute_neo4j_write_crud(cypher_query, parameters)
@@ -129,7 +118,6 @@ def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = Non
 # QUERY DECOMPOSITION TOOLS
 # ============================================================================
 
-@function_tool
 def decompose_query_tool(user_query: str) -> Dict[str, Any]:
     """
     Decompose complex user queries into individual sub-questions
@@ -232,32 +220,26 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
 # PRODUCTION RAG TOOLS
 # ============================================================================
 
-@function_tool
 def rag_search_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Complete search pipeline with Pinecone + Neo4j + DynamoDB"""
     return rag_search_crud(query, limit, filter_dict, namespace)
 
-@function_tool
 def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, Any]], metadata: Dict[str, Any], namespace: str = None) -> Dict[str, Any]:
     """RAG: Complete document ingestion pipeline"""
     return rag_upsert_document_crud(document_id, chunks, metadata, namespace)
 
-@function_tool
 def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict[str, Any]]:
     """RAG: Chunk document text for processing"""
     return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
 
-@function_tool
 def rag_process_document_with_docling_tool(document_path: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Process document using Docling with hierarchical semantic chunking"""
     return rag_process_document_with_docling_crud(document_path, document_id, namespace)
 
-@function_tool
 def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Process document from bytes using Docling (useful for S3 documents)"""
     return rag_process_document_from_bytes_crud(document_bytes, filename, document_id, namespace)
 
-@function_tool
 def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Enhanced RAG search with hierarchical context from Docling chunks"""
     return rag_search_with_hierarchical_context_crud(query, limit, filter_dict, namespace)
@@ -266,9 +248,27 @@ def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter
 # RAG AGENT - PRODUCTION RAG PIPELINE
 # ============================================================================
 
-rag_agent = Agent(
-    name="RAG Agent",
-    instructions="""You are a RAG Agent that handles intelligent document retrieval and generation using production RAG tools.
+# Note: Agent creation removed - using OpenAI chat completions directly
+
+class CRUDAgentInput(BaseModel):
+    model_config = {"extra": "forbid"}  # Configure to not allow additional properties
+    
+    user_query: str
+    conversation_history: List[Dict[str, Any]] = []
+    conversation_id: str = ""
+    user_preferences: Dict[str, Any] = {}
+
+# ============================================================================
+# MAIN PROCESSING FUNCTION
+# ============================================================================
+
+async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[str, Any]:
+    """Run the unified CRUD processing workflow using OpenAI chat completions"""
+    start_time = time.time()
+    
+    try:
+        # Create system message with instructions
+        system_message = """You are a RAG Agent that handles intelligent document retrieval and generation using production RAG tools.
 
 ## Core Mission:
 You provide intelligent responses by searching through documents using vector similarity, knowledge graphs, and metadata.
@@ -375,95 +375,43 @@ For advanced document processing with hierarchical semantic chunking:
 ## Key Principle:
 **You are the intelligence** - use your AI capabilities for all business logic, decision-making, processing, and formatting. Tools are only for data operations.
 
-When you receive any query, immediately begin your intelligent analysis and use the appropriate CRUD tools to gather data, then use your AI to process and respond naturally.""",
-    model="gpt-4",
-    tools=[
-        # Query decomposition tools
-        decompose_query_tool,
-        # Individual CRUD tools
-        read_s3_data_tool,
-        search_pinecone_tool,
-        search_neo4j_tool,
-        read_dynamodb_tool,
-        batch_read_dynamodb_tool,
-        write_dynamodb_tool,
-        update_dynamodb_tool,
-        delete_dynamodb_tool,
-        generate_embedding_tool,
-        upsert_pinecone_tool,
-        delete_pinecone_tool,
-        execute_neo4j_write_tool,
-        # Production RAG tools
-        rag_search_tool,
-        rag_upsert_document_tool,
-        rag_chunk_document_tool,
-        # Docling-powered RAG tools
-        rag_process_document_with_docling_tool,
-        rag_process_document_from_bytes_tool,
-        rag_search_with_hierarchical_context_tool
-    ]
-)
+When you receive any query, immediately begin your intelligent analysis and use the appropriate CRUD tools to gather data, then use your AI to process and respond naturally."""
 
-class CRUDAgentInput(BaseModel):
-    model_config = {"extra": "forbid"}  # Configure to not allow additional properties
-    
-    user_query: str
-    conversation_history: List[Dict[str, Any]] = []
-    conversation_id: str = ""
-    user_preferences: Dict[str, Any] = {}
-
-# ============================================================================
-# MAIN PROCESSING FUNCTION
-# ============================================================================
-
-async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[str, Any]:
-    """Run the unified CRUD processing workflow"""
-    start_time = time.time()
-    
-    try:
-        # Create conversation history for the agent
-        conversation_history: List[Dict[str, Any]] = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": workflow_input.user_query
-                    }
-                ]
-            }
-        ]
-        
-        # Run the unified CRUD agent
-        crud_result = await Runner.run(
-            rag_agent,
-            input=workflow_input.user_query
+        # Use OpenAI chat completions API
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": workflow_input.user_query},
+            ],
+            temperature=0.1,
+            max_tokens=4096
         )
-
-        # Extract the final response
-        try:
-            final_response = crud_result.final_output
-        except Exception as e:
-            final_response = f"Error generating response: {str(e)}"
+        
+        final_response = response.choices[0].message.content
+        processing_time = time.time() - start_time
         
         return {
             "response": final_response,
             "sources": [],
             "conversation_id": workflow_input.conversation_id,
             "processing_time": processing_time,
-            "workflow_type": "unified_crud_processing",
-            "agent_used": "unified_crud_agent",
-            "tools_used": "crud_only",
-            "business_logic": "ai_handled"
+            "timestamp": datetime.now().isoformat(),
+            "model": "gpt-4o-mini",
+            "status": "success"
         }
         
     except Exception as e:
         processing_time = time.time() - start_time
+        logger.error(f"Error in run_unified_crud_processing: {str(e)}")
+        
         return {
-            "response": f"Error processing query: {str(e)}",
+            "response": f"Error processing request: {str(e)}",
             "sources": [],
             "conversation_id": workflow_input.conversation_id,
             "processing_time": processing_time,
-            "workflow_type": "unified_crud_processing",
-            "agent_used": "unified_crud_agent"
+            "timestamp": datetime.now().isoformat(),
+            "model": "gpt-4o-mini",
+            "status": "error",
+            "error": str(e)
         }
