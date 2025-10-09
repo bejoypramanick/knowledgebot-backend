@@ -2,10 +2,10 @@
 # EasyOCR Layer: Only OCR functionality
 # ~12 packages, ~200MB
 
-"pydantic>=2.12.0"
-"typing-extensions>=4.9.0"
-"orjson>=3.9.0"
-"numpy>=1.26.0,<2.0.0"
+pydantic>=2.12.0
+typing-extensions>=4.9.0
+orjson>=3.9.0
+numpy>=1.26.0,<2.0.0
 torch>=2.1.0
 torchvision>=0.16.0
 transformers>=4.36.0

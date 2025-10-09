@@ -2,10 +2,10 @@
 # Table Detection Layer: Only table structure detection
 # ~10 packages, ~300MB
 
-"pydantic>=2.12.0"
-"typing-extensions>=4.9.0"
-"orjson>=3.9.0"
-"numpy>=1.26.0,<2.0.0"
+pydantic>=2.12.0
+typing-extensions>=4.9.0
+orjson>=3.9.0
+numpy>=1.26.0,<2.0.0
 pandas>=2.2.0
 torch>=2.1.0
 torchvision>=0.16.0
