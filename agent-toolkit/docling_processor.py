@@ -145,25 +145,25 @@ class DoclingProcessor:
             # Extract document metadata
             doc_metadata = self._extract_document_metadata(doc, document_id)
             
-        # Process document into chunks using Docling hierarchical chunking
-        if self.enable_hierarchical_chunking:
-            chunks = self._create_hierarchical_chunks(doc, document_id)
-        else:
-            raise Exception("Hierarchical chunking is disabled - Docling processing requires hierarchical chunking")
-        
-        processing_time = time.time() - start_time
-        
-        logger.info(f"Document processed successfully: {len(chunks)} chunks in {processing_time:.2f}s")
-        
-        return DocumentProcessingResult(
-            document_id=document_id,
-            document_type=doc_metadata.get('document_type', 'unknown'),
-            total_chunks=len(chunks),
-            hierarchical_chunks=chunks,
-            processing_time=processing_time,
-            success=True,
-            metadata=doc_metadata
-        )
+            # Process document into chunks using Docling hierarchical chunking
+            if self.enable_hierarchical_chunking:
+                chunks = self._create_hierarchical_chunks(doc, document_id)
+            else:
+                raise Exception("Hierarchical chunking is disabled - Docling processing requires hierarchical chunking")
+            
+            processing_time = time.time() - start_time
+            
+            logger.info(f"Document processed successfully: {len(chunks)} chunks in {processing_time:.2f}s")
+            
+            return DocumentProcessingResult(
+                document_id=document_id,
+                document_type=doc_metadata.get('document_type', 'unknown'),
+                total_chunks=len(chunks),
+                hierarchical_chunks=chunks,
+                processing_time=processing_time,
+                success=True,
+                metadata=doc_metadata
+            )
         
     except Exception as e:
         processing_time = time.time() - start_time
