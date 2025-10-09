@@ -165,20 +165,20 @@ class DoclingProcessor:
                 metadata=doc_metadata
             )
         
-    except Exception as e:
-        processing_time = time.time() - start_time
-        error_msg = f"Failed to process document {document_path}: {str(e)}"
-        logger.error(error_msg)
-        
-        return DocumentProcessingResult(
-            document_id=document_id or "unknown",
-            document_type="unknown",
-            total_chunks=0,
-            hierarchical_chunks=[],
-            processing_time=processing_time,
-            success=False,
-            error_message=error_msg
-        )
+        except Exception as e:
+            processing_time = time.time() - start_time
+            error_msg = f"Failed to process document {document_path}: {str(e)}"
+            logger.error(error_msg)
+            
+            return DocumentProcessingResult(
+                document_id=document_id or "unknown",
+                document_type="unknown",
+                total_chunks=0,
+                hierarchical_chunks=[],
+                processing_time=processing_time,
+                success=False,
+                error_message=error_msg
+            )
     
     def _generate_document_id(self, document_path: str) -> str:
         """Generate a unique document ID based on file path and content"""
