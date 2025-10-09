@@ -57,4 +57,4 @@ RUN python -m pip install --no-cache-dir \
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 
 # Set the CMD to your document processing handler
-CMD ["lambda_handlers", "lambda_handler_knowledge_document_ingestion"]
+CMD ["lambda_handlers.lambda_handler_knowledge_document_ingestion"]
