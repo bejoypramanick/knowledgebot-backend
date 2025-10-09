@@ -405,6 +405,8 @@ When you receive any query, immediately begin your intelligent analysis and use 
 )
 
 class CRUDAgentInput(BaseModel):
+    model_config = {"extra": "forbid"}  # Configure to not allow additional properties
+    
     user_query: str
     conversation_history: List[Dict[str, Any]] = []
     conversation_id: str = ""
