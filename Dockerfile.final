@@ -51,7 +51,36 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
-# Correct Lambda entrypoint format
-ENTRYPOINT ["python", "-m", "lambda_handlers.lambda_handler"]
+# Enhanced error-catching entrypoint with detailed logging
+RUN echo '#!/bin/bash' > /tmp/lambda_entrypoint.sh && \
+    echo 'set -e' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "=== LAMBDA ENTRYPOINT DEBUG START ==="' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Timestamp: $(date)"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Container ID: $(hostname)"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Working Directory: $(pwd)"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "User: $(whoami)"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "=== ENVIRONMENT VARIABLES ==="' >> /tmp/lambda_entrypoint.sh && \
+    echo 'env | sort' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "=== FILE SYSTEM CHECK ==="' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Files in /var/task:"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'ls -la /var/task/' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "=== PYTHON ENVIRONMENT CHECK ==="' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Python executable: $(which python)"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Python version:"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'python --version' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Python path:"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'python -c "import sys; print(sys.path)"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "=== MODULE IMPORT TEST ==="' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Testing lambda_handlers import..."' >> /tmp/lambda_entrypoint.sh && \
+    echo 'python -c "try: import lambda_handlers; print(\"✅ lambda_handlers imported successfully\"); except Exception as e: print(\"❌ lambda_handlers import failed:\", str(e)); import traceback; traceback.print_exc()"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "=== LAMBDA HANDLER TEST ==="' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Testing lambda_handler function..."' >> /tmp/lambda_entrypoint.sh && \
+    echo 'python -c "try: from lambda_handlers import lambda_handler; print(\"✅ lambda_handler function found\"); except Exception as e: print(\"❌ lambda_handler function not found:\", str(e)); import traceback; traceback.print_exc()"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "=== STARTING LAMBDA HANDLER ==="' >> /tmp/lambda_entrypoint.sh && \
+    echo 'echo "Executing: python -m lambda_handlers.lambda_handler"' >> /tmp/lambda_entrypoint.sh && \
+    echo 'exec python -m lambda_handlers.lambda_handler' >> /tmp/lambda_entrypoint.sh && \
+    chmod +x /tmp/lambda_entrypoint.sh
+
+ENTRYPOINT ["/tmp/lambda_entrypoint.sh"]
 # Trigger full deployment
 # Trigger fresh build with current code
