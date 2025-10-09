@@ -33,9 +33,20 @@ try:
     
     # Initialize Neo4j (Required)
     from neo4j import GraphDatabase
+    neo4j_uri = os.environ.get('NEO4J_URI')
+    neo4j_user = os.environ.get('NEO4J_USER')
+    neo4j_password = os.environ.get('NEO4J_PASSWORD')
+    
+    logger.info(f"🔍 Neo4j Debug Info:")
+    logger.info(f"NEO4J_URI: '{neo4j_uri}'")
+    logger.info(f"NEO4J_USER: '{neo4j_user}'")
+    logger.info(f"NEO4J_PASSWORD length: {len(neo4j_password) if neo4j_password else 0}")
+    logger.info(f"NEO4J_URI starts with bolt: {neo4j_uri.startswith('bolt://') if neo4j_uri else False}")
+    logger.info(f"NEO4J_URI starts with neo4j: {neo4j_uri.startswith('neo4j://') if neo4j_uri else False}")
+    
     _neo4j_driver = GraphDatabase.driver(
-        os.environ.get('NEO4J_URI'),
-        auth=(os.environ.get('NEO4J_USER'), os.environ.get('NEO4J_PASSWORD'))
+        neo4j_uri,
+        auth=(neo4j_user, neo4j_password)
     )
     
     # Initialize embedding model (sentence transformers by default)
