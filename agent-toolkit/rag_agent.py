@@ -16,9 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("✅ Configured logging in rag_agent")
 
-from openai import OpenAI
-client = OpenAI()
-logger.info("✅ Imported OpenAI client with openai.agents support")
+from openai_agents import function_tool, Agent, Runner
+logger.info("✅ Imported openai_agents modules: function_tool, Agent, Runner")
 
 from pydantic import BaseModel
 logger.info("✅ Imported pydantic.BaseModel")
@@ -66,62 +65,62 @@ logger.info("✅ Imported rag_operations modules")
 # CRUD TOOLS ONLY - NO BUSINESS LOGIC
 # ============================================================================
 
-@client.agent_function
+@function_tool
 def read_s3_data_tool(bucket: str, key: str) -> Dict[str, Any]:
     """CRUD: Read data from S3 bucket"""
     return read_s3_data_crud(bucket, key)
 
-@client.agent_function
+@function_tool
 def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> Dict[str, Any]:
     """CRUD: Search Pinecone vector database"""
     return search_pinecone_crud(query_vector, limit)
 
-@client.agent_function
+@function_tool
 def search_neo4j_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
     """CRUD: Execute Cypher query in Neo4j"""
     return search_neo4j_crud(cypher_query, parameters)
 
-@client.agent_function
+@function_tool
 def read_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Read item from DynamoDB table"""
     return read_dynamodb_crud(table_name, key)
 
-@client.agent_function
+@function_tool
 def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, Any]]) -> Dict[str, Any]:
     """CRUD: Batch read items from DynamoDB table"""
     return batch_read_dynamodb_crud(table_name, keys)
 
-@client.agent_function
+@function_tool
 def write_dynamodb_tool(table_name: str, item: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Write item to DynamoDB table"""
     return write_dynamodb_crud(table_name, item)
 
-@client.agent_function
+@function_tool
 def update_dynamodb_tool(table_name: str, key: Dict[str, Any], update_expression: str, expression_values: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Update item in DynamoDB table"""
     return update_dynamodb_crud(table_name, key, update_expression, expression_values)
 
-@client.agent_function
+@function_tool
 def delete_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
     """CRUD: Delete item from DynamoDB table"""
     return delete_dynamodb_crud(table_name, key)
 
-@client.agent_function
+@function_tool
 def generate_embedding_tool(text: str) -> Dict[str, Any]:
     """CRUD: Generate embedding vector for text"""
     return generate_embedding_crud(text)
 
-@client.agent_function
+@function_tool
 def upsert_pinecone_tool(vectors: List[Dict[str, Any]], namespace: str = None) -> Dict[str, Any]:
     """CRUD: Upsert vectors to Pinecone"""
     return upsert_pinecone_crud(vectors, namespace)
 
-@client.agent_function
+@function_tool
 def delete_pinecone_tool(ids: List[str], namespace: str = None) -> Dict[str, Any]:
     """CRUD: Delete vectors from Pinecone"""
     return delete_pinecone_crud(ids, namespace)
 
-@client.agent_function
+@function_tool
 def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
     """CRUD: Execute write Cypher query in Neo4j"""
     return execute_neo4j_write_crud(cypher_query, parameters)
@@ -130,7 +129,7 @@ def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = Non
 # QUERY DECOMPOSITION TOOLS
 # ============================================================================
 
-@client.agent_function
+@function_tool
 def decompose_query_tool(user_query: str) -> Dict[str, Any]:
     """
     Decompose complex user queries into individual sub-questions
@@ -233,32 +232,32 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
 # PRODUCTION RAG TOOLS
 # ============================================================================
 
-@client.agent_function
+@function_tool
 def rag_search_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Complete search pipeline with Pinecone + Neo4j + DynamoDB"""
     return rag_search_crud(query, limit, filter_dict, namespace)
 
-@client.agent_function
+@function_tool
 def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, Any]], metadata: Dict[str, Any], namespace: str = None) -> Dict[str, Any]:
     """RAG: Complete document ingestion pipeline"""
     return rag_upsert_document_crud(document_id, chunks, metadata, namespace)
 
-@client.agent_function
+@function_tool
 def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict[str, Any]]:
     """RAG: Chunk document text for processing"""
     return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
 
-@client.agent_function
+@function_tool
 def rag_process_document_with_docling_tool(document_path: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Process document using Docling with hierarchical semantic chunking"""
     return rag_process_document_with_docling_crud(document_path, document_id, namespace)
 
-@client.agent_function
+@function_tool
 def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Process document from bytes using Docling (useful for S3 documents)"""
     return rag_process_document_from_bytes_crud(document_bytes, filename, document_id, namespace)
 
-@client.agent_function
+@function_tool
 def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
     """RAG: Enhanced RAG search with hierarchical context from Docling chunks"""
     return rag_search_with_hierarchical_context_crud(query, limit, filter_dict, namespace)
@@ -267,8 +266,7 @@ def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter
 # RAG AGENT - PRODUCTION RAG PIPELINE
 # ============================================================================
 
-# Create agent using OpenAI client
-rag_agent = client.agents.create(
+rag_agent = Agent(
     name="RAG Agent",
     instructions="""You are a RAG Agent that handles intelligent document retrieval and generation using production RAG tools.
 
@@ -436,9 +434,9 @@ async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[st
             }
         ]
         
-        # Run the unified CRUD agent using OpenAI client
-        crud_result = await client.agents.run(
-            agent_id=rag_agent.id,
+        # Run the unified CRUD agent
+        crud_result = await Runner.run(
+            rag_agent,
             input=workflow_input.user_query
         )
 
