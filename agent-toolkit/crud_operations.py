@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Global Pinecone index - will be initialized at runtime
 _pinecone_index = None
+_neo4j_driver = None
 
 def get_pinecone_index():
     """Get Pinecone index, initializing if needed"""
@@ -31,6 +32,21 @@ def get_pinecone_index():
         _pinecone_index = pc.Index(os.environ.get('PINECONE_INDEX_NAME'))
     return _pinecone_index
 
+def get_neo4j_driver():
+    """Get Neo4j driver, initializing if needed"""
+    global _neo4j_driver
+    if _neo4j_driver is None:
+        neo4j_uri = os.environ.get('NEO4J_URI')
+        neo4j_user = os.environ.get('NEO4J_USER')
+        neo4j_password = os.environ.get('NEO4J_PASSWORD')
+        
+        if not neo4j_uri or not neo4j_user or not neo4j_password:
+            raise ValueError("NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD environment variables are required")
+        
+        from neo4j import GraphDatabase
+        _neo4j_driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+    return _neo4j_driver
+
 # Initialize AWS services
 try:
     s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'ap-south-1'))
@@ -42,12 +58,7 @@ try:
     _pinecone_dimensions = int(os.environ.get('PINECONE_DIMENSIONS', '1536'))
     _pinecone_metric = os.environ.get('PINECONE_METRIC', 'cosine')
     
-    # Initialize Neo4j (Required)
-    from neo4j import GraphDatabase
-    _neo4j_driver = GraphDatabase.driver(
-        os.environ.get('NEO4J_URI'),
-        auth=(os.environ.get('NEO4J_USER'), os.environ.get('NEO4J_PASSWORD'))
-    )
+    # Neo4j will be initialized at runtime via get_neo4j_driver()
     
     # Initialize embedding model (sentence transformers by default)
     try:
@@ -179,7 +190,7 @@ def search_neo4j_crud(cypher_query: str, parameters: Dict[str, Any] = None) -> D
     """
     try:
         
-        with _neo4j_driver.session() as session:
+        with get_neo4j_driver().session() as session:
             result = session.run(cypher_query, parameters or {})
             records = [dict(record) for record in result]
             
@@ -502,7 +513,7 @@ def execute_neo4j_write_crud(cypher_query: str, parameters: Dict[str, Any] = Non
     """
     try:
         
-        with _neo4j_driver.session() as session:
+        with get_neo4j_driver().session() as session:
             result = session.run(cypher_query, parameters or {})
             summary = result.consume()
             
