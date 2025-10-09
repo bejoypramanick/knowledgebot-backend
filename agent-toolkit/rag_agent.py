@@ -66,14 +66,15 @@ logger.info("✅ Imported rag_operations modules")
 # ============================================================================
 
 @function_tool
-def read_s3_data_tool(bucket: str, key: str) -> Dict[str, Any]:
+def read_s3_data_tool(bucket: str, key: str) -> str:
     """CRUD: Read data from S3 bucket"""
-    return read_s3_data_crud(bucket, key)
+    result = read_s3_data_crud(bucket, key)
+    return str(result)
 
 @function_tool
-def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> str:
+def search_pinecone_tool(query_vector: str, limit: int = 10) -> str:
     """CRUD: Search Pinecone vector database"""
-    result = search_pinecone_crud(query_vector, limit)
+    result = search_pinecone_crud(eval(query_vector), limit)
     return str(result)
 
 @function_tool
@@ -141,7 +142,7 @@ def execute_neo4j_write_tool(cypher_query: str) -> str:
 # ============================================================================
 
 @function_tool
-def decompose_query_tool(user_query: str) -> Dict[str, Any]:
+def decompose_query_tool(user_query: str) -> str:
     """
     Decompose complex user queries into individual sub-questions
     
@@ -220,15 +221,15 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
                 "decomposition_notes": "Could not parse decomposition, treating as single question"
             }
         
-        return {
+        return str({
             "success": True,
             "decomposition": decomposition_data,
             "sub_question_count": len(decomposition_data.get("sub_questions", [])),
             "is_multi_part": decomposition_data.get("is_multi_part", False)
-        }
+        })
         
     except Exception as e:
-        return {
+        return str({
             "success": False,
             "error": str(e),
             "decomposition": {
@@ -237,7 +238,7 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
                 "original_query": user_query,
                 "decomposition_notes": f"Error in decomposition: {str(e)}"
             }
-        }
+        })
 
 # ============================================================================
 # PRODUCTION RAG TOOLS
