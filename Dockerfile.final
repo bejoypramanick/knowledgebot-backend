@@ -10,8 +10,8 @@ ENV PIP_NO_CACHE_DIR=1
 
 # Install system dependencies for ML processing
 # Docling handles its own PDF/OCR dependencies through Python packages
-RUN microdnf update -y && \
-    microdnf install -y \
+RUN yum update -y && \
+    yum install -y \
     gcc \
     gcc-c++ \
     make \
@@ -26,7 +26,7 @@ RUN microdnf update -y && \
     gdbm-devel \
     ncurses-devel \
     python3-devel \
-    && microdnf clean all
+    && yum clean all
 
 # Upgrade pip and install core dependencies
 RUN python -m pip install --upgrade pip setuptools wheel

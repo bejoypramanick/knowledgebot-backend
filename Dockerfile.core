@@ -8,9 +8,9 @@ ENV LC_ALL=C.UTF-8
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_CACHE_DIR=1
 
-# Install system dependencies for AWS Lambda Python 3.12 (Amazon Linux 2023 uses dnf)
-RUN dnf update -y && \
-    dnf install -y \
+# Install system dependencies for AWS Lambda Python 3.12 (Amazon Linux 2 uses yum)
+RUN yum update -y && \
+    yum install -y \
     gcc \
     gcc-c++ \
     make \
@@ -25,7 +25,7 @@ RUN dnf update -y && \
     gdbm-devel \
     ncurses-devel \
     python3-devel \
-    && dnf clean all
+    && yum clean all
 
 # Upgrade pip and install core dependencies
 RUN python -m pip install --upgrade pip setuptools wheel
