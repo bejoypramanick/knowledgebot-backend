@@ -51,39 +51,8 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
-# Enhanced logging with explicit CloudWatch integration
-RUN echo '#!/bin/bash' > /tmp/lambda_entrypoint.sh && \
-    echo 'set -e' >> /tmp/lambda_entrypoint.sh && \
-    echo '# Function to ensure logs reach CloudWatch' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch() {' >> /tmp/lambda_entrypoint.sh && \
-    echo '    echo "[$(date)] $1" >&2' >> /tmp/lambda_entrypoint.sh && \
-    echo '    echo "[$(date)] $1"' >> /tmp/lambda_entrypoint.sh && \
-    echo '}' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "=== LAMBDA ENTRYPOINT DEBUG START ==="' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Timestamp: $(date)"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Container ID: $(hostname)"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Working Directory: $(pwd)"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "User: $(whoami)"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "=== ENVIRONMENT VARIABLES ==="' >> /tmp/lambda_entrypoint.sh && \
-    echo 'env | sort | while read line; do log_to_cloudwatch "ENV: $line"; done' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "=== FILE SYSTEM CHECK ==="' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Files in /var/task:"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'ls -la /var/task/ | while read line; do log_to_cloudwatch "FILE: $line"; done' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "=== PYTHON ENVIRONMENT CHECK ==="' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Python executable: $(which python)"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Python version: $(python --version)"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Python path: $(python -c \"import sys; print(sys.path)\")"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "=== MODULE IMPORT TEST ==="' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Testing lambda_handlers import..."' >> /tmp/lambda_entrypoint.sh && \
-    echo 'python -c "try: import lambda_handlers; print(\"✅ lambda_handlers imported successfully\"); except Exception as e: print(\"❌ lambda_handlers import failed:\", str(e)); import traceback; traceback.print_exc()" 2>&1 | while read line; do log_to_cloudwatch "IMPORT: $line"; done' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "=== LAMBDA HANDLER TEST ==="' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Testing lambda_handler function..."' >> /tmp/lambda_entrypoint.sh && \
-    echo 'python -c "try: from lambda_handlers import lambda_handler; print(\"✅ lambda_handler function found\"); except Exception as e: print(\"❌ lambda_handler function not found:\", str(e)); import traceback; traceback.print_exc()" 2>&1 | while read line; do log_to_cloudwatch "HANDLER: $line"; done' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "=== STARTING LAMBDA HANDLER ==="' >> /tmp/lambda_entrypoint.sh && \
-    echo 'log_to_cloudwatch "Executing: python -m lambda_handlers.lambda_handler"' >> /tmp/lambda_entrypoint.sh && \
-    echo 'exec python -m lambda_handlers.lambda_handler' >> /tmp/lambda_entrypoint.sh && \
-    chmod +x /tmp/lambda_entrypoint.sh
-
-ENTRYPOINT ["/tmp/lambda_entrypoint.sh"]
+# Set the Lambda handler function
+# AWS Lambda will call the specified handler function when invoked
+CMD ["lambda_handlers.lambda_handler"]
 # Trigger full deployment
 # Trigger fresh build with current code
