@@ -16,34 +16,34 @@ RUN python -m pip install --upgrade pip setuptools wheel
 
 # Install core Python packages
 RUN python -m pip install --no-cache-dir \
-    boto3>=1.34.0 \
-    botocore>=1.34.0 \
-    openai>=1.12.0 \
-    openai-agents>=0.1.0 \
-    pinecone-client>=3.1.0 \
-    neo4j>=5.24.0 \
-    httpx>=0.25.0 \
-    orjson>=3.9.0 \
-    structlog>=23.2.0 \
-    pydantic>=2.5.0 \
-    typing-extensions>=4.9.0
+    "boto3>=1.34.0" \
+    "botocore>=1.34.0" \
+    "openai>=1.12.0" \
+    "openai-agents>=0.1.0" \
+    "pinecone-client>=3.1.0" \
+    "neo4j>=5.24.0" \
+    "httpx>=0.25.0" \
+    "orjson>=3.9.0" \
+    "structlog>=23.2.0" \
+    "pydantic>=2.5.0" \
+    "typing-extensions>=4.9.0"
 
 # Install data processing and ML stack
 RUN python -m pip install --no-cache-dir \
     "numpy>=1.26.0,<2.0.0" \
-    pandas>=2.2.0
+    "pandas>=2.2.0"
 
 # Install ML libraries with CPU-only PyTorch for Lambda
 RUN python -m pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
-    torch>=2.1.0 \
-    transformers>=4.36.0 \
-    sentence-transformers>=2.2.2 \
-    tensorflow>=2.14.0
+    "torch>=2.1.0" \
+    "transformers>=4.36.0" \
+    "sentence-transformers>=2.2.2" \
+    "tensorflow>=2.14.0"
 
 # Install Docling for document processing (now uses the installed PyTorch)
 RUN python -m pip install --no-cache-dir \
-    docling>=2.25.0
+    "docling>=2.25.0"
 
 # Copy application code
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
@@ -52,7 +52,7 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 RUN ls -la ${LAMBDA_TASK_ROOT}/ && \
     python -c "import sys; print('Python path:', sys.path)" && \
     python -c "import os; print('Files in task root:', os.listdir('${LAMBDA_TASK_ROOT}'))" && \
-    python -c "try: import lambda_handlers; print('✅ lambda_handlers imported successfully'); except Exception as e: print('❌ lambda_handlers import failed:', str(e)); import traceback; traceback.print_exc()"
+    python -c "try: import lambda_handlers; print('lambda_handlers imported successfully'); except Exception as e: print('lambda_handlers import failed:', str(e)); import traceback; traceback.print_exc()"
 
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
