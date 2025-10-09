@@ -1,0 +1,10 @@
+# Dockerfile.s3-reader-layered
+# Minimal: Uses core layer (includes AWS SDK)
+# Target size: ~85MB (core + handler)
+
+FROM knowledgebot-core-layer:latest
+
+# Copy only the handler
+COPY microservices/s3-reader-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+
+CMD ["lambda_function.lambda_handler"]

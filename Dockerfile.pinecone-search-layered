@@ -1,0 +1,10 @@
+# Dockerfile.pinecone-search-layered
+# Minimal: Uses database layer (includes Pinecone)
+# Target size: ~155MB (database + handler)
+
+FROM knowledgebot-database-layer:latest
+
+# Copy only the handler
+COPY microservices/pinecone-search-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+
+CMD ["lambda_function.lambda_handler"]

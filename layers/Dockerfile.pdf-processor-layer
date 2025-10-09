@@ -1,0 +1,17 @@
+# Dockerfile.pdf-processor-layer
+# PDF Processing Layer: Only PDF parsing and extraction
+# Target size: ~200MB
+# Used by: PDF-specific services
+
+FROM knowledgebot-ml-layer:latest
+
+# Install PDF processing dependencies
+RUN python -m pip install --no-cache-dir \
+    pypdfium2>=4.0.0 \
+    pdfplumber>=0.10.0 \
+    pymupdf>=1.23.0
+
+# Create a marker file to identify this layer
+RUN echo "knowledgebot-pdf-processor-layer-$(date +%s)" > /tmp/layer-marker
+
+CMD ["python", "-c", "print('PDF Processor layer ready')"]

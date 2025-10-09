@@ -1,0 +1,10 @@
+# Dockerfile.text-chunker-layered
+# Minimal: Uses base layer only
+# Target size: ~55MB (base + handler)
+
+FROM knowledgebot-base-layer:latest
+
+# Copy only the handler
+COPY microservices/text-chunker-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+
+CMD ["lambda_function.lambda_handler"]

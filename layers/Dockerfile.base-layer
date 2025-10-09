@@ -1,0 +1,25 @@
+# Dockerfile.base-layer
+# Base Layer: Python 3.12 + pip + basic utilities
+# Target size: ~50MB
+# Reusable by: ALL other images
+
+FROM public.ecr.aws/lambda/python:3.12
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# Upgrade pip and install basic utilities
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# Install only essential Python packages
+RUN python -m pip install --no-cache-dir \
+    pydantic>=2.12.0 \
+    typing-extensions>=4.9.0 \
+    orjson>=3.9.0
+
+# Create a marker file to identify this layer
+RUN echo "knowledgebot-base-layer-$(date +%s)" > /tmp/layer-marker
+
+CMD ["python", "-c", "print('Base layer ready')"]

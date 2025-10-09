@@ -1,0 +1,10 @@
+# Dockerfile.neo4j-write-layered
+# Minimal: Uses database layer (includes Neo4j)
+# Target size: ~155MB (database + handler)
+
+FROM knowledgebot-database-layer:latest
+
+# Copy only the handler
+COPY microservices/neo4j-write-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+
+CMD ["lambda_function.lambda_handler"]

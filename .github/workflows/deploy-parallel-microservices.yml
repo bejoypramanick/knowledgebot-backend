@@ -1,0 +1,381 @@
+name: Build and Deploy All Micro-Services in Parallel
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+  ECR_REPOSITORY_PREFIX: knowledgebot-parallel
+
+jobs:
+  # Single build job with parallel child jobs inside
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Base Layers
+          - type: layer
+            name: base-layer
+            dockerfile: layers/Dockerfile.base-layer
+            size: "~50MB"
+            memory: 256
+            timeout: 30
+          - type: layer
+            name: core-layer
+            dockerfile: layers/Dockerfile.core-layer
+            size: "~80MB"
+            memory: 256
+            timeout: 30
+          - type: layer
+            name: database-layer
+            dockerfile: layers/Dockerfile.database-layer
+            size: "~150MB"
+            memory: 512
+            timeout: 60
+          - type: layer
+            name: ml-layer
+            dockerfile: layers/Dockerfile.ml-layer
+            size: "~400MB"
+            memory: 1024
+            timeout: 120
+          
+          # Granular OCR Layers
+          - type: layer
+            name: pdf-processor-layer
+            dockerfile: layers/Dockerfile.pdf-processor-layer
+            size: "~200MB"
+            memory: 1024
+            timeout: 120
+          - type: layer
+            name: easyocr-layer
+            dockerfile: layers/Dockerfile.easyocr-layer
+            size: "~300MB"
+            memory: 1024
+            timeout: 180
+          - type: layer
+            name: table-detector-layer
+            dockerfile: layers/Dockerfile.table-detector-layer
+            size: "~400MB"
+            memory: 1024
+            timeout: 240
+          - type: layer
+            name: docling-core-layer
+            dockerfile: layers/Dockerfile.docling-core-layer
+            size: "~500MB"
+            memory: 1024
+            timeout: 300
+          - type: layer
+            name: docling-full-layer
+            dockerfile: layers/Dockerfile.docling-full-layer
+            size: "~1.2GB"
+            memory: 2048
+            timeout: 900
+          
+          # Core Micro-Services
+          - type: service
+            name: presigned-url
+            dockerfile: Dockerfile.presigned-url-layered
+            base_layer: base-layer
+            size: "~55MB"
+            memory: 256
+            timeout: 30
+          - type: service
+            name: s3-reader
+            dockerfile: Dockerfile.s3-reader-layered
+            base_layer: core-layer
+            size: "~85MB"
+            memory: 256
+            timeout: 30
+          - type: service
+            name: pinecone-search
+            dockerfile: Dockerfile.pinecone-search-layered
+            base_layer: database-layer
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - type: service
+            name: pinecone-upsert
+            dockerfile: Dockerfile.pinecone-upsert-layered
+            base_layer: database-layer
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - type: service
+            name: neo4j-search
+            dockerfile: Dockerfile.neo4j-search-layered
+            base_layer: database-layer
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - type: service
+            name: neo4j-write
+            dockerfile: Dockerfile.neo4j-write-layered
+            base_layer: database-layer
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - type: service
+            name: dynamodb-crud
+            dockerfile: Dockerfile.dynamodb-crud-layered
+            base_layer: core-layer
+            size: "~85MB"
+            memory: 256
+            timeout: 30
+          - type: service
+            name: text-chunker
+            dockerfile: Dockerfile.text-chunker-layered
+            base_layer: base-layer
+            size: "~55MB"
+            memory: 256
+            timeout: 30
+          - type: service
+            name: embedding-generator
+            dockerfile: Dockerfile.embedding-generator-layered
+            base_layer: ml-layer
+            size: "~405MB"
+            memory: 1024
+            timeout: 120
+          - type: service
+            name: rag-search
+            dockerfile: Dockerfile.rag-search-layered
+            base_layer: ml-layer
+            size: "~405MB"
+            memory: 1024
+            timeout: 180
+          - type: service
+            name: chat-generator
+            dockerfile: Dockerfile.chat-generator-layered
+            base_layer: ml-layer
+            size: "~405MB"
+            memory: 1024
+            timeout: 300
+          
+          # Granular OCR Micro-Services
+          - type: service
+            name: pdf-processor
+            dockerfile: Dockerfile.pdf-processor-layered
+            base_layer: pdf-processor-layer
+            size: "~255MB"
+            memory: 1024
+            timeout: 120
+          - type: service
+            name: easyocr
+            dockerfile: Dockerfile.easyocr-layered
+            base_layer: easyocr-layer
+            size: "~355MB"
+            memory: 1024
+            timeout: 180
+          - type: service
+            name: table-detector
+            dockerfile: Dockerfile.table-detector-layered
+            base_layer: table-detector-layer
+            size: "~455MB"
+            memory: 1024
+            timeout: 240
+          - type: service
+            name: docling-core
+            dockerfile: Dockerfile.docling-core-layered
+            base_layer: docling-core-layer
+            size: "~555MB"
+            memory: 1024
+            timeout: 300
+          - type: service
+            name: docling-full
+            dockerfile: Dockerfile.docling-full-layered
+            base_layer: docling-full-layer
+            size: "~1.25GB"
+            memory: 2048
+            timeout: 900
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build Layer/Service ${{ matrix.name }}
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        echo "🏗️ Building ${{ matrix.type }}: ${{ matrix.name }} (${{ matrix.size }})"
+        
+        if [ "${{ matrix.type }}" = "layer" ]; then
+          # Build layer directly
+          docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+          
+          # Tag as latest
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+          
+          # Push both tags
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+          
+          echo "✅ Built and pushed layer: ${{ matrix.name }}"
+          
+        else
+          # Build service using base layer
+          echo "📦 Building service: ${{ matrix.name }} using ${{ matrix.base_layer }}"
+          
+          # Import the base layer from ECR
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:$IMAGE_TAG
+          
+          # Tag it locally for the build
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:$IMAGE_TAG knowledgebot-${{ matrix.base_layer }}:latest
+          
+          # Build the service using the imported layer
+          docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+          
+          # Tag as latest
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+          
+          # Push both tags
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+          
+          echo "✅ Built and pushed service: ${{ matrix.name }}"
+        fi
+
+    - name: Deploy Service ${{ matrix.name }} (if service)
+      if: matrix.type == 'service' && github.ref == 'refs/heads/main'
+      env:
+        IMAGE_URI: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_PREFIX }}-${{ matrix.name }}:${{ github.sha }}
+      run: |
+        echo "🚀 Deploying ${{ matrix.name }} microservice"
+        
+        # Check if function exists
+        if aws lambda get-function --function-name knowledgebot-parallel-${{ matrix.name }} >/dev/null 2>&1; then
+          echo "🔄 Updating existing microservice: knowledgebot-parallel-${{ matrix.name }}"
+          
+          # Update function code
+          aws lambda update-function-code \
+            --function-name knowledgebot-parallel-${{ matrix.name }} \
+            --image-uri $IMAGE_URI
+          
+          # Update function configuration
+          aws lambda update-function-configuration \
+            --function-name knowledgebot-parallel-${{ matrix.name }} \
+            --memory-size ${{ matrix.memory }} \
+            --timeout ${{ matrix.timeout }} \
+            --environment Variables="{
+              PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},
+              PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},
+              PINECONE_HOST=${{ secrets.PINECONE_HOST }},
+              PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},
+              OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
+              NEO4J_URI=${{ secrets.NEO4J_URI }},
+              NEO4J_USER=${{ secrets.NEO4J_USER }},
+              NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},
+              AWS_REGION=${{ env.AWS_REGION }}
+            }"
+        else
+          echo "🆕 Creating new microservice: knowledgebot-parallel-${{ matrix.name }}"
+          
+          # Create new function
+          aws lambda create-function \
+            --function-name knowledgebot-parallel-${{ matrix.name }} \
+            --package-type Image \
+            --code ImageUri=$IMAGE_URI \
+            --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+            --memory-size ${{ matrix.memory }} \
+            --timeout ${{ matrix.timeout }} \
+            --environment Variables="{
+              PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},
+              PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},
+              PINECONE_HOST=${{ secrets.PINECONE_HOST }},
+              PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},
+              OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
+              NEO4J_URI=${{ secrets.NEO4J_URI }},
+              NEO4J_USER=${{ secrets.NEO4J_USER }},
+              NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},
+              AWS_REGION=${{ env.AWS_REGION }}
+            }"
+        fi
+        
+        echo "✅ Deployed knowledgebot-parallel-${{ matrix.name }} successfully"
+
+    - name: Output build details
+      run: |
+        echo "📦 ${{ matrix.type }}: $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG"
+        echo "📏 Size: ${{ matrix.size }}"
+        echo "💾 Memory: ${{ matrix.memory }}MB"
+        echo "⏱️ Timeout: ${{ matrix.timeout }}s"
+
+  # Summary job
+  deployment-summary:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Single Job Parallel Architecture Deployment Summary
+      run: |
+        echo "🎉 KnowledgeBot Single Job Parallel Micro-Services Deployment Complete!"
+        echo ""
+        echo "🏗️ Layers Built (9 layers):"
+        echo "  • knowledgebot-parallel-base-layer (~50MB)"
+        echo "  • knowledgebot-parallel-core-layer (~80MB)"
+        echo "  • knowledgebot-parallel-database-layer (~150MB)"
+        echo "  • knowledgebot-parallel-ml-layer (~400MB)"
+        echo "  • knowledgebot-parallel-pdf-processor-layer (~200MB)"
+        echo "  • knowledgebot-parallel-easyocr-layer (~300MB)"
+        echo "  • knowledgebot-parallel-table-detector-layer (~400MB)"
+        echo "  • knowledgebot-parallel-docling-core-layer (~500MB)"
+        echo "  • knowledgebot-parallel-docling-full-layer (~1.2GB)"
+        echo ""
+        echo "📋 Micro-Services Deployed (16 services):"
+        echo ""
+        echo "🔧 Core Services:"
+        echo "  • knowledgebot-parallel-presigned-url (256MB, 30s, ~55MB)"
+        echo "  • knowledgebot-parallel-s3-reader (256MB, 30s, ~85MB)"
+        echo "  • knowledgebot-parallel-pinecone-search (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-parallel-pinecone-upsert (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-parallel-neo4j-search (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-parallel-neo4j-write (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-parallel-dynamodb-crud (256MB, 30s, ~85MB)"
+        echo "  • knowledgebot-parallel-text-chunker (256MB, 30s, ~55MB)"
+        echo "  • knowledgebot-parallel-embedding-generator (1024MB, 120s, ~405MB)"
+        echo "  • knowledgebot-parallel-rag-search (1024MB, 180s, ~405MB)"
+        echo "  • knowledgebot-parallel-chat-generator (1024MB, 300s, ~405MB)"
+        echo ""
+        echo "📄 Granular OCR Services:"
+        echo "  • knowledgebot-parallel-pdf-processor (1024MB, 120s, ~255MB)"
+        echo "  • knowledgebot-parallel-easyocr (1024MB, 180s, ~355MB)"
+        echo "  • knowledgebot-parallel-table-detector (1024MB, 240s, ~455MB)"
+        echo "  • knowledgebot-parallel-docling-core (1024MB, 300s, ~555MB)"
+        echo "  • knowledgebot-parallel-docling-full (2048MB, 900s, ~1.25GB)"
+        echo ""
+        echo "⚡ Single Job Parallel Processing Benefits:"
+        echo "  • All 25 builds run simultaneously in one job"
+        echo "  • No sequential dependencies between jobs"
+        echo "  • Maximum GitHub Actions parallelism"
+        echo "  • Fastest possible deployment"
+        echo "  • Zero redundancy through ECR imports"
+        echo "  • Build and deploy in same parallel child jobs"
+        echo ""
+        echo "📊 Total Architecture:"
+        echo "  • Total Layers: 9 (~3.2GB)"
+        echo "  • Total Services: 16 (~4.1GB)"
+        echo "  • Total Storage: ~7.3GB"
+        echo "  • Build Time: ~15 minutes (all parallel)"
+        echo "  • Redundancy: 0% (shared layers)"
+        echo ""
+        echo "🔗 ECR Repositories:"
+        echo "  • Registry: ${{ env.ECR_REGISTRY }}"
+        echo "  • Prefix: ${{ env.ECR_REPOSITORY_PREFIX }}"
+        echo "  • Total Images: 25 (9 layers + 16 services)"

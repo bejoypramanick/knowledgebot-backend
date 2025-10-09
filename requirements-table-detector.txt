@@ -1,0 +1,19 @@
+# requirements-table-detector.txt
+# Table Detection Layer: Only table structure detection
+# ~10 packages, ~400MB
+
+# Base dependencies
+pydantic>=2.12.0
+orjson>=3.9.0
+numpy>=1.26.0,<2.0.0
+pandas>=2.2.0
+
+# Table Detection ML
+torch>=2.1.0
+torchvision>=0.16.0
+transformers>=4.36.0
+tensorflow>=2.14.0
+
+# Computer Vision
+opencv-python>=4.8.0
+scikit-image>=0.21.0

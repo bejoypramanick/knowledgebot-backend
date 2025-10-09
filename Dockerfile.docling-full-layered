@@ -1,0 +1,10 @@
+# Dockerfile.docling-full-layered
+# Docling Full Processing: Uses Docling full layer
+# Target size: ~1.25GB (ML + Docling full + handler)
+
+FROM knowledgebot-docling-full-layer:latest
+
+# Copy only the handler
+COPY microservices/docling-ocr-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+
+CMD ["lambda_function.lambda_handler"]

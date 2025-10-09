@@ -1,0 +1,18 @@
+# Dockerfile.core-layer
+# Core Layer: Base + AWS SDK + HTTP clients
+# Target size: ~80MB
+# Reusable by: Database, ML, Heavy layers
+
+FROM knowledgebot-base-layer:latest
+
+# Install AWS SDK and HTTP clients
+RUN python -m pip install --no-cache-dir \
+    boto3>=1.34.0 \
+    botocore>=1.34.0 \
+    httpx>=0.25.0 \
+    requests>=2.31.0
+
+# Create a marker file to identify this layer
+RUN echo "knowledgebot-core-layer-$(date +%s)" > /tmp/layer-marker
+
+CMD ["python", "-c", "print('Core layer ready')"]

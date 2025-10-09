@@ -1,0 +1,10 @@
+# Dockerfile.easyocr-layered
+# EasyOCR Processing: Uses EasyOCR layer
+# Target size: ~355MB (ML + OCR + handler)
+
+FROM knowledgebot-easyocr-layer:latest
+
+# Copy only the handler
+COPY microservices/easyocr-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+
+CMD ["lambda_function.lambda_handler"]

@@ -1,0 +1,30 @@
+# Dockerfile.docling-full-layer
+# Docling Full Layer: Complete Docling with all features
+# Target size: ~1.2GB
+# Used by: Full document processing services
+
+FROM knowledgebot-ml-layer:latest
+
+# Install complete Docling dependencies
+RUN python -m pip install --no-cache-dir \
+    docling>=2.25.0 \
+    easyocr>=1.7.0 \
+    opencv-python>=4.8.0 \
+    pillow>=10.0.0 \
+    pytesseract>=0.3.10 \
+    pypdfium2>=4.0.0 \
+    pdfplumber>=0.10.0 \
+    pymupdf>=1.23.0 \
+    python-docx>=0.8.11 \
+    python-pptx>=0.6.21 \
+    beautifulsoup4>=4.12.0 \
+    lxml>=4.9.0 \
+    nltk>=3.8.0 \
+    spacy>=3.7.0 \
+    scikit-image>=0.21.0 \
+    matplotlib>=3.7.0
+
+# Create a marker file to identify this layer
+RUN echo "knowledgebot-docling-full-layer-$(date +%s)" > /tmp/layer-marker
+
+CMD ["python", "-c", "print('Docling Full layer ready')"]
