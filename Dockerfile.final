@@ -68,7 +68,7 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
-# Set the CMD to your main handler
-CMD ["lambda_handlers.lambda_handler"]
+# Set the ENTRYPOINT to your main handler
+ENTRYPOINT ["lambda_handlers.lambda_handler"]
 # Trigger full deployment
 # Trigger fresh build with current code

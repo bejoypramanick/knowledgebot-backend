@@ -7,13 +7,35 @@ All rights reserved. Commercial use prohibited without written permission.
 Contact: bejoy.pramanick@globistaan.com for licensing inquiries.
 """
 
-from openai.agents import function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig
+# Configure logging first
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+logger.info("✅ Configured logging in rag_agent")
+
+from agents import function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig
+logger.info("✅ Imported agents modules: function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig")
+
 from openai.types.shared.reasoning import Reasoning
+logger.info("✅ Imported openai.types.shared.reasoning.Reasoning")
+
 from pydantic import BaseModel
+logger.info("✅ Imported pydantic.BaseModel")
+
 from typing import List, Dict, Any
+logger.info("✅ Imported typing.List, Dict, Any")
+
 import time
+logger.info("✅ Imported time module")
+
 import asyncio
+logger.info("✅ Imported asyncio module")
+
 from datetime import datetime
+logger.info("✅ Imported datetime module")
 
 # Import CRUD tools and RAG operations
 from crud_operations import (
@@ -30,6 +52,8 @@ from crud_operations import (
     delete_pinecone_crud,
     execute_neo4j_write_crud
 )
+logger.info("✅ Imported crud_operations modules")
+
 from rag_operations import (
     rag_search_crud,
     rag_upsert_document_crud,
@@ -38,6 +62,7 @@ from rag_operations import (
     rag_process_document_from_bytes_crud,
     rag_search_with_hierarchical_context_crud
 )
+logger.info("✅ Imported rag_operations modules")
 
 # ============================================================================
 # CRUD TOOLS ONLY - NO BUSINESS LOGIC

@@ -47,5 +47,5 @@ RUN python -m pip install --no-cache-dir \
 # Copy application code
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 
-# Set the CMD to your handler (adjust as needed)
-CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
+# Set the ENTRYPOINT to your handler (adjust as needed)
+ENTRYPOINT ["lambda_handlers.lambda_handler_knowledge_chat"]

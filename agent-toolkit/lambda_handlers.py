@@ -8,23 +8,36 @@ All rights reserved. Commercial use prohibited without written permission.
 Contact: bejoy.pramanick@globistaan.com for licensing inquiries.
 """
 
-import json
-import os
-import asyncio
-from typing import Dict, Any
+# Configure logging first
 import logging
-import traceback
-from datetime import datetime
-
-# Import our RAG agent
-from rag_agent import run_unified_crud_processing, CRUDAgentInput
-
-# Configure logging with detailed format
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+logger.info("✅ Configured logging")
+
+import json
+logger.info("✅ Imported json module")
+
+import os
+logger.info("✅ Imported os module")
+
+import asyncio
+logger.info("✅ Imported asyncio module")
+
+from typing import Dict, Any
+logger.info("✅ Imported typing.Dict, Any")
+
+import traceback
+logger.info("✅ Imported traceback module")
+
+from datetime import datetime
+logger.info("✅ Imported datetime module")
+
+# Import our RAG agent
+from rag_agent import run_unified_crud_processing, CRUDAgentInput
+logger.info("✅ Imported rag_agent modules: run_unified_crud_processing, CRUDAgentInput")
 
 async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Knowledge chat handler - all business logic handled by AgentBuilder model"""
