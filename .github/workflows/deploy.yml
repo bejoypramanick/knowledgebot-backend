@@ -236,12 +236,42 @@ jobs:
 
         # Deploy knowledgebot-chat if final image was built
         if [ "$FINAL_BUILT" = true ]; then
+          echo "🚀 Deploying knowledgebot-chat with image: $FINAL_IMAGE_TAG"
+          
           if aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
             echo "📝 Updating existing knowledgebot-chat function..."
             aws lambda update-function-code \
               --function-name knowledgebot-chat \
               --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$FINAL_IMAGE_TAG \
               --region ${{ env.AWS_REGION }}
+            
+            # Verify the update was successful
+            echo "⏳ Waiting for knowledgebot-chat update to complete..."
+            while true; do
+              STATUS=$(aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "NotFound")
+              if [ "$STATUS" = "Successful" ]; then
+                echo "✅ knowledgebot-chat updated successfully"
+                break
+              elif [ "$STATUS" = "Failed" ]; then
+                echo "❌ knowledgebot-chat update failed"
+                aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatusReason' --output text
+                exit 1
+              else
+                echo "⏳ knowledgebot-chat status: $STATUS, waiting..."
+                sleep 10
+              fi
+            done
+            
+            # Verify the image URI is correct
+            CURRENT_IMAGE=$(aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.Code.ImageUri' --output text)
+            EXPECTED_IMAGE="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$FINAL_IMAGE_TAG"
+            if [ "$CURRENT_IMAGE" = "$EXPECTED_IMAGE" ]; then
+              echo "✅ knowledgebot-chat is using the correct image: $CURRENT_IMAGE"
+            else
+              echo "❌ Image mismatch! Current: $CURRENT_IMAGE, Expected: $EXPECTED_IMAGE"
+              exit 1
+            fi
+            
           else
             echo "🆕 Creating knowledgebot-chat function..."
             aws lambda create-function \
@@ -253,6 +283,23 @@ jobs:
               --region ${{ env.AWS_REGION }} \
               --timeout 300 \
               --memory-size 2048
+            
+            # Verify the creation was successful
+            echo "⏳ Waiting for knowledgebot-chat creation to complete..."
+            while true; do
+              STATUS=$(aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.State' --output text 2>/dev/null || echo "NotFound")
+              if [ "$STATUS" = "Active" ]; then
+                echo "✅ knowledgebot-chat created successfully"
+                break
+              elif [ "$STATUS" = "Failed" ]; then
+                echo "❌ knowledgebot-chat creation failed"
+                aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.StateReason' --output text
+                exit 1
+              else
+                echo "⏳ knowledgebot-chat status: $STATUS, waiting..."
+                sleep 10
+              fi
+            done
           fi
         else
           echo "⏭️ Skipping knowledgebot-chat deployment (no final image)"
@@ -260,12 +307,42 @@ jobs:
 
         # Deploy knowledgebot-document-ingestion if docling image was built
         if [ "$DOCLING_BUILT" = true ]; then
+          echo "🚀 Deploying knowledgebot-document-ingestion with image: $DOCLING_IMAGE_TAG"
+          
           if aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
             echo "📝 Updating existing knowledgebot-document-ingestion function..."
             aws lambda update-function-code \
               --function-name knowledgebot-document-ingestion \
               --image-uri $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$DOCLING_IMAGE_TAG \
               --region ${{ env.AWS_REGION }}
+            
+            # Verify the update was successful
+            echo "⏳ Waiting for knowledgebot-document-ingestion update to complete..."
+            while true; do
+              STATUS=$(aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "NotFound")
+              if [ "$STATUS" = "Successful" ]; then
+                echo "✅ knowledgebot-document-ingestion updated successfully"
+                break
+              elif [ "$STATUS" = "Failed" ]; then
+                echo "❌ knowledgebot-document-ingestion update failed"
+                aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatusReason' --output text
+                exit 1
+              else
+                echo "⏳ knowledgebot-document-ingestion status: $STATUS, waiting..."
+                sleep 10
+              fi
+            done
+            
+            # Verify the image URI is correct
+            CURRENT_IMAGE=$(aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.Code.ImageUri' --output text)
+            EXPECTED_IMAGE="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$DOCLING_IMAGE_TAG"
+            if [ "$CURRENT_IMAGE" = "$EXPECTED_IMAGE" ]; then
+              echo "✅ knowledgebot-document-ingestion is using the correct image: $CURRENT_IMAGE"
+            else
+              echo "❌ Image mismatch! Current: $CURRENT_IMAGE, Expected: $EXPECTED_IMAGE"
+              exit 1
+            fi
+            
           else
             echo "🆕 Creating knowledgebot-document-ingestion function..."
             aws lambda create-function \
@@ -277,6 +354,23 @@ jobs:
               --region ${{ env.AWS_REGION }} \
               --timeout 900 \
               --memory-size 3008
+            
+            # Verify the creation was successful
+            echo "⏳ Waiting for knowledgebot-document-ingestion creation to complete..."
+            while true; do
+              STATUS=$(aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.State' --output text 2>/dev/null || echo "NotFound")
+              if [ "$STATUS" = "Active" ]; then
+                echo "✅ knowledgebot-document-ingestion created successfully"
+                break
+              elif [ "$STATUS" = "Failed" ]; then
+                echo "❌ knowledgebot-document-ingestion creation failed"
+                aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.StateReason' --output text
+                exit 1
+              else
+                echo "⏳ knowledgebot-document-ingestion status: $STATUS, waiting..."
+                sleep 10
+              fi
+            done
           fi
         else
           echo "⏭️ Skipping knowledgebot-document-ingestion deployment (no docling image)"
@@ -356,4 +450,18 @@ jobs:
           echo "✅ Environment variables set for knowledgebot-document-ingestion"
         fi
 
+        # Final verification: Ensure both Lambda functions are using the latest images
+        echo "🔍 Final verification: Checking Lambda function images..."
+        
+        if [ "$FINAL_BUILT" = true ]; then
+          CHAT_IMAGE=$(aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.Code.ImageUri' --output text)
+          echo "✅ knowledgebot-chat is using image: $CHAT_IMAGE"
+        fi
+        
+        if [ "$DOCLING_BUILT" = true ]; then
+          DOC_IMAGE=$(aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.Code.ImageUri' --output text)
+          echo "✅ knowledgebot-document-ingestion is using image: $DOC_IMAGE"
+        fi
+        
         echo "✅ Lambda functions deployed and configured successfully"
+        echo "🎉 All Lambda functions are now pointing to the latest deployed images!"
