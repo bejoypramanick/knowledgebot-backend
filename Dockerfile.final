@@ -52,7 +52,7 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 RUN ls -la ${LAMBDA_TASK_ROOT}/ && \
     python -c "import sys; print('Python path:', sys.path)" && \
     python -c "import os; print('Files in task root:', os.listdir('${LAMBDA_TASK_ROOT}'))" && \
-    python -c "try: import lambda_handlers; print('lambda_handlers imported successfully'); except Exception as e: print('lambda_handlers import failed:', str(e)); import traceback; traceback.print_exc()"
+    python -c "import lambda_handlers; print('lambda_handlers imported successfully')"
 
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
