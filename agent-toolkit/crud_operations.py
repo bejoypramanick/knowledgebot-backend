@@ -16,14 +16,26 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# Global Pinecone index - will be initialized at runtime
+_pinecone_index = None
+
+def get_pinecone_index():
+    """Get Pinecone index, initializing if needed"""
+    global _pinecone_index
+    if _pinecone_index is None:
+        pinecone_api_key = os.environ.get('PINECONE_API_KEY')
+        if not pinecone_api_key:
+            raise ValueError("PINECONE_API_KEY environment variable is required")
+        from pinecone import Pinecone
+        pc = Pinecone(api_key=pinecone_api_key)
+        _pinecone_index = pc.Index(os.environ.get('PINECONE_INDEX_NAME'))
+    return _pinecone_index
+
 # Initialize AWS services
 try:
     s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'ap-south-1'))
     dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION', 'ap-south-1'))
-    # Initialize Pinecone (Required) - Updated to new API
-    from pinecone import Pinecone
-    pc = Pinecone(api_key=os.environ.get('PINECONE_API_KEY'))
-    _pinecone_index = pc.Index(os.environ.get('PINECONE_INDEX_NAME'))
+    # Pinecone will be initialized at runtime via get_pinecone_index()
     
     # Store Pinecone configuration for validation
     _pinecone_host = os.environ.get('PINECONE_HOST')
@@ -123,7 +135,7 @@ def search_pinecone_crud(query_vector: List[float], limit: int = 10, filter_dict
         if namespace:
             query_params['namespace'] = namespace
         
-        results = _pinecone_index.query(**query_params)
+        results = get_pinecone_index().query(**query_params)
         
         # Process results for RAG
         processed_matches = []
@@ -432,7 +444,7 @@ def upsert_pinecone_crud(vectors: List[Dict[str, Any]], namespace: str = None) -
     """
     try:
         
-        response = _pinecone_index.upsert(
+        response = get_pinecone_index().upsert(
             vectors=vectors,
             namespace=namespace
         )
@@ -461,7 +473,7 @@ def delete_pinecone_crud(ids: List[str], namespace: str = None) -> Dict[str, Any
     """
     try:
         
-        response = _pinecone_index.delete(
+        response = get_pinecone_index().delete(
             ids=ids,
             namespace=namespace
         )
