@@ -16,8 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("✅ Configured logging in rag_agent")
 
-from openai_agents import function_tool, Agent, Runner
-logger.info("✅ Imported openai_agents modules: function_tool, Agent, Runner")
+from agents import function_tool, Agent, Runner
+logger.info("✅ Imported agents modules: function_tool, Agent, Runner")
 
 from pydantic import BaseModel
 logger.info("✅ Imported pydantic.BaseModel")
