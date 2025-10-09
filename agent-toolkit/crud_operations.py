@@ -11,6 +11,7 @@ import json
 import logging
 import boto3
 import os
+import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
