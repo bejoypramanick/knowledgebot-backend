@@ -50,17 +50,12 @@ RUN python -m pip install --no-cache-dir \
     "pydantic>=2.5.0" \
     "typing-extensions>=4.9.0"
 
-# Install ML dependencies with CPU-only PyTorch for Lambda environment
+# Install Docling with CPU-only PyTorch for Lambda environment
+# Using the extra-index-url method as recommended in Docling docs for CPU-only
 RUN python -m pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     "torch>=2.1.0" \
-    "torchvision>=0.16.0" \
-    "transformers>=4.36.0" \
-    "numpy>=1.26.0,<2.0.0" \
-    "pillow>=10.0.0"
-
-# Install Docling (now uses the installed PyTorch/torchvision)
-RUN python -m pip install --no-cache-dir \
+    && python -m pip install --no-cache-dir \
     "docling>=2.25.0"
 
 # Copy application code
