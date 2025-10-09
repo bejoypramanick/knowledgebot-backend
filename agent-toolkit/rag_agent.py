@@ -71,59 +71,70 @@ def read_s3_data_tool(bucket: str, key: str) -> Dict[str, Any]:
     return read_s3_data_crud(bucket, key)
 
 @function_tool
-def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> Dict[str, Any]:
+def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> str:
     """CRUD: Search Pinecone vector database"""
-    return search_pinecone_crud(query_vector, limit)
+    result = search_pinecone_crud(query_vector, limit)
+    return str(result)
 
 @function_tool
-def search_neo4j_tool(cypher_query: str, parameters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def search_neo4j_tool(cypher_query: str) -> str:
     """CRUD: Execute Cypher query in Neo4j"""
-    return search_neo4j_crud(cypher_query, parameters)
+    result = search_neo4j_crud(cypher_query, None)
+    return str(result)
 
 @function_tool
-def read_dynamodb_tool(table_name: str, key: Dict[str, str]) -> Dict[str, Any]:
+def read_dynamodb_tool(table_name: str, key: str) -> str:
     """CRUD: Read item from DynamoDB table"""
-    return read_dynamodb_crud(table_name, key)
+    result = read_dynamodb_crud(table_name, eval(key))
+    return str(result)
 
 @function_tool
-def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, str]]) -> Dict[str, Any]:
+def batch_read_dynamodb_tool(table_name: str, keys: str) -> str:
     """CRUD: Batch read items from DynamoDB table"""
-    return batch_read_dynamodb_crud(table_name, keys)
+    result = batch_read_dynamodb_crud(table_name, eval(keys))
+    return str(result)
 
 @function_tool
-def write_dynamodb_tool(table_name: str, item: Dict[str, str]) -> Dict[str, Any]:
+def write_dynamodb_tool(table_name: str, item: str) -> str:
     """CRUD: Write item to DynamoDB table"""
-    return write_dynamodb_crud(table_name, item)
+    result = write_dynamodb_crud(table_name, eval(item))
+    return str(result)
 
 @function_tool
-def update_dynamodb_tool(table_name: str, key: Dict[str, str], update_expression: str, expression_values: Dict[str, str]) -> Dict[str, Any]:
+def update_dynamodb_tool(table_name: str, key: str, update_expression: str, expression_values: str) -> str:
     """CRUD: Update item in DynamoDB table"""
-    return update_dynamodb_crud(table_name, key, update_expression, expression_values)
+    result = update_dynamodb_crud(table_name, eval(key), update_expression, eval(expression_values))
+    return str(result)
 
 @function_tool
-def delete_dynamodb_tool(table_name: str, key: Dict[str, str]) -> Dict[str, Any]:
+def delete_dynamodb_tool(table_name: str, key: str) -> str:
     """CRUD: Delete item from DynamoDB table"""
-    return delete_dynamodb_crud(table_name, key)
+    result = delete_dynamodb_crud(table_name, eval(key))
+    return str(result)
 
 @function_tool
-def generate_embedding_tool(text: str) -> Dict[str, Any]:
+def generate_embedding_tool(text: str) -> str:
     """CRUD: Generate embedding vector for text"""
-    return generate_embedding_crud(text)
+    result = generate_embedding_crud(text)
+    return str(result)
 
 @function_tool
-def upsert_pinecone_tool(vectors: List[Dict[str, str]], namespace: Optional[str] = None) -> Dict[str, Any]:
+def upsert_pinecone_tool(vectors: str, namespace: str = "") -> str:
     """CRUD: Upsert vectors to Pinecone"""
-    return upsert_pinecone_crud(vectors, namespace)
+    result = upsert_pinecone_crud(eval(vectors), namespace if namespace else None)
+    return str(result)
 
 @function_tool
-def delete_pinecone_tool(ids: List[str], namespace: str = None) -> Dict[str, Any]:
+def delete_pinecone_tool(ids: str, namespace: str = "") -> str:
     """CRUD: Delete vectors from Pinecone"""
-    return delete_pinecone_crud(ids, namespace)
+    result = delete_pinecone_crud(eval(ids), namespace if namespace else None)
+    return str(result)
 
 @function_tool
-def execute_neo4j_write_tool(cypher_query: str, parameters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def execute_neo4j_write_tool(cypher_query: str) -> str:
     """CRUD: Execute write Cypher query in Neo4j"""
-    return execute_neo4j_write_crud(cypher_query, parameters)
+    result = execute_neo4j_write_crud(cypher_query, None)
+    return str(result)
 
 # ============================================================================
 # QUERY DECOMPOSITION TOOLS
@@ -233,34 +244,40 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
 # ============================================================================
 
 @function_tool
-def rag_search_tool(query: str, limit: int = 5, filter_dict: Optional[Dict[str, str]] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
+def rag_search_tool(query: str, limit: int = 5, filter_dict: str = "", namespace: str = "") -> str:
     """RAG: Complete search pipeline with Pinecone + Neo4j + DynamoDB"""
-    return rag_search_crud(query, limit, filter_dict, namespace)
+    result = rag_search_crud(query, limit, eval(filter_dict) if filter_dict else None, namespace if namespace else None)
+    return str(result)
 
 @function_tool
-def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, str]], metadata: Dict[str, str], namespace: Optional[str] = None) -> Dict[str, Any]:
+def rag_upsert_document_tool(document_id: str, chunks: str, metadata: str, namespace: str = "") -> str:
     """RAG: Complete document ingestion pipeline"""
-    return rag_upsert_document_crud(document_id, chunks, metadata, namespace)
+    result = rag_upsert_document_crud(document_id, eval(chunks), eval(metadata), namespace if namespace else None)
+    return str(result)
 
 @function_tool
-def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict[str, str]]:
-    """RAG: Chunk document text for processing"""
-    return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
+def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> str:
+    """RAG: Intelligent text chunking"""
+    result = rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
+    return str(result)
 
 @function_tool
-def rag_process_document_with_docling_tool(document_path: str, document_id: Optional[str] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
-    """RAG: Process document using Docling with hierarchical semantic chunking"""
-    return rag_process_document_with_docling_crud(document_path, document_id, namespace)
+def rag_process_document_with_docling_tool(document_path: str, document_id: str = "", namespace: str = "") -> str:
+    """RAG: Advanced document processing with hierarchical semantic chunking"""
+    result = rag_process_document_with_docling_crud(document_path, document_id if document_id else None, namespace if namespace else None)
+    return str(result)
 
 @function_tool
-def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: Optional[str] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
+def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: str = "", namespace: str = "") -> str:
     """RAG: Process document from bytes using Docling (useful for S3 documents)"""
-    return rag_process_document_from_bytes_crud(document_bytes, filename, document_id, namespace)
+    result = rag_process_document_from_bytes_crud(document_bytes, filename, document_id if document_id else None, namespace if namespace else None)
+    return str(result)
 
 @function_tool
-def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: Optional[Dict[str, str]] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
+def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: str = "", namespace: str = "") -> str:
     """RAG: Enhanced RAG search with hierarchical context from Docling chunks"""
-    return rag_search_with_hierarchical_context_crud(query, limit, filter_dict, namespace)
+    result = rag_search_with_hierarchical_context_crud(query, limit, eval(filter_dict) if filter_dict else None, namespace if namespace else None)
+    return str(result)
 
 # ============================================================================
 # RAG AGENT - PRODUCTION RAG PIPELINE
