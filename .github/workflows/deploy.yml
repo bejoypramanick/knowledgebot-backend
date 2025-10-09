@@ -80,6 +80,16 @@ jobs:
         NEO4J_USER: ${{ secrets.NEO4J_USER }}
         NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
       run: |
+        echo "🔍 Debugging environment variables:"
+        echo "PINECONE_API_KEY: ${PINECONE_API_KEY:0:10}..." 
+        echo "PINECONE_INDEX_NAME: $PINECONE_INDEX_NAME"
+        echo "PINECONE_HOST: $PINECONE_HOST"
+        echo "PINECONE_DIMENSIONS: $PINECONE_DIMENSIONS"
+        echo "OPENAI_API_KEY: ${OPENAI_API_KEY:0:10}..."
+        echo "NEO4J_URI: $NEO4J_URI"
+        echo "NEO4J_USER: $NEO4J_USER"
+        echo "NEO4J_PASSWORD: ${NEO4J_PASSWORD:0:5}..."
+        echo ""
         echo "🐳 Building core dependencies image..."
         docker build -f Dockerfile.core \
           --build-arg PINECONE_API_KEY="$PINECONE_API_KEY" \
@@ -133,6 +143,16 @@ jobs:
         NEO4J_USER: ${{ secrets.NEO4J_USER }}
         NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
       run: |
+        echo "🔍 Debugging environment variables:"
+        echo "PINECONE_API_KEY: ${PINECONE_API_KEY:0:10}..." 
+        echo "PINECONE_INDEX_NAME: $PINECONE_INDEX_NAME"
+        echo "PINECONE_HOST: $PINECONE_HOST"
+        echo "PINECONE_DIMENSIONS: $PINECONE_DIMENSIONS"
+        echo "OPENAI_API_KEY: ${OPENAI_API_KEY:0:10}..."
+        echo "NEO4J_URI: $NEO4J_URI"
+        echo "NEO4J_USER: $NEO4J_USER"
+        echo "NEO4J_PASSWORD: ${NEO4J_PASSWORD:0:5}..."
+        echo ""
         echo "🐳 Building Docling image..."
         docker build -f Dockerfile.docling \
           --build-arg PINECONE_API_KEY="$PINECONE_API_KEY" \
@@ -186,6 +206,16 @@ jobs:
         NEO4J_USER: ${{ secrets.NEO4J_USER }}
         NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
       run: |
+        echo "🔍 Debugging environment variables:"
+        echo "PINECONE_API_KEY: ${PINECONE_API_KEY:0:10}..." 
+        echo "PINECONE_INDEX_NAME: $PINECONE_INDEX_NAME"
+        echo "PINECONE_HOST: $PINECONE_HOST"
+        echo "PINECONE_DIMENSIONS: $PINECONE_DIMENSIONS"
+        echo "OPENAI_API_KEY: ${OPENAI_API_KEY:0:10}..."
+        echo "NEO4J_URI: $NEO4J_URI"
+        echo "NEO4J_USER: $NEO4J_USER"
+        echo "NEO4J_PASSWORD: ${NEO4J_PASSWORD:0:5}..."
+        echo ""
         echo "🐳 Building final application image..."
         docker build -f Dockerfile.final \
           --build-arg PINECONE_API_KEY="$PINECONE_API_KEY" \
