@@ -25,7 +25,7 @@ logger.info("✅ Imported openai.types.shared.reasoning.Reasoning")
 from pydantic import BaseModel, Field
 logger.info("✅ Imported pydantic.BaseModel, Field")
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 logger.info("✅ Imported typing.List, Dict, Any, Optional")
 
 import time
@@ -71,7 +71,7 @@ logger.info("✅ Imported rag_operations modules")
 class GenericResponse(BaseModel):
     """Generic response model for function tools"""
     success: bool = Field(description="Whether the operation was successful")
-    data: Optional[Dict[str, Any]] = Field(default=None, description="Response data")
+    data: Optional[Dict[str, Union[str, int, float, bool]]] = Field(default=None, description="Response data")
     error: Optional[str] = Field(default=None, description="Error message if any")
     message: Optional[str] = Field(default=None, description="Additional message")
 
@@ -83,24 +83,24 @@ class SearchPineconeRequest(BaseModel):
 class SearchNeo4jRequest(BaseModel):
     """Request model for Neo4j search"""
     cypher_query: str = Field(description="Cypher query to execute")
-    parameters: Optional[Dict[str, Any]] = Field(default=None, description="Query parameters")
+    parameters: Optional[Dict[str, Union[str, int, float, bool]]] = Field(default=None, description="Query parameters")
 
 class DynamoDBKeyRequest(BaseModel):
     """Request model for DynamoDB operations with key"""
     table_name: str = Field(description="DynamoDB table name")
-    key: Dict[str, Any] = Field(description="Item key")
+    key: Dict[str, Union[str, int, float, bool]] = Field(description="Item key")
 
 class DynamoDBWriteRequest(BaseModel):
     """Request model for DynamoDB write operations"""
     table_name: str = Field(description="DynamoDB table name")
-    item: Dict[str, Any] = Field(description="Item to write")
+    item: Dict[str, Union[str, int, float, bool]] = Field(description="Item to write")
 
 class DynamoDBUpdateRequest(BaseModel):
     """Request model for DynamoDB update operations"""
     table_name: str = Field(description="DynamoDB table name")
-    key: Dict[str, Any] = Field(description="Item key")
+    key: Dict[str, Union[str, int, float, bool]] = Field(description="Item key")
     update_expression: str = Field(description="Update expression")
-    expression_values: Dict[str, Any] = Field(description="Expression values")
+    expression_values: Dict[str, Union[str, int, float, bool]] = Field(description="Expression values")
 
 class EmbeddingRequest(BaseModel):
     """Request model for embedding generation"""
@@ -108,7 +108,7 @@ class EmbeddingRequest(BaseModel):
 
 class PineconeUpsertRequest(BaseModel):
     """Request model for Pinecone upsert operations"""
-    vectors: List[Dict[str, Any]] = Field(description="Vectors to upsert")
+    vectors: List[Dict[str, Union[str, int, float, bool]]] = Field(description="Vectors to upsert")
     namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
 
 class PineconeDeleteRequest(BaseModel):
@@ -119,7 +119,7 @@ class PineconeDeleteRequest(BaseModel):
 class Neo4jWriteRequest(BaseModel):
     """Request model for Neo4j write operations"""
     cypher_query: str = Field(description="Cypher query to execute")
-    parameters: Optional[Dict[str, Any]] = Field(default=None, description="Query parameters")
+    parameters: Optional[Dict[str, Union[str, int, float, bool]]] = Field(default=None, description="Query parameters")
 
 class QueryDecompositionRequest(BaseModel):
     """Request model for query decomposition"""
@@ -129,14 +129,14 @@ class RAGSearchRequest(BaseModel):
     """Request model for RAG search"""
     query: str = Field(description="Search query")
     limit: int = Field(default=5, description="Maximum number of results")
-    filter_dict: Optional[Dict[str, Any]] = Field(default=None, description="Filter criteria")
+    filter_dict: Optional[Dict[str, Union[str, int, float, bool]]] = Field(default=None, description="Filter criteria")
     namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
 
 class DocumentUpsertRequest(BaseModel):
     """Request model for document upsert"""
     document_id: str = Field(description="Document ID")
-    chunks: List[Dict[str, Any]] = Field(description="Document chunks")
-    metadata: Dict[str, Any] = Field(description="Document metadata")
+    chunks: List[Dict[str, Union[str, int, float, bool]]] = Field(description="Document chunks")
+    metadata: Dict[str, Union[str, int, float, bool]] = Field(description="Document metadata")
     namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
 
 class DocumentChunkRequest(BaseModel):
