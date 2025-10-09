@@ -20,13 +20,10 @@ logger = logging.getLogger(__name__)
 try:
     s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'ap-south-1'))
     dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION', 'ap-south-1'))
-    # Initialize Pinecone (Required)
-    import pinecone
-    pinecone.init(
-        api_key=os.environ.get('PINECONE_API_KEY'),
-        environment=os.environ.get('PINECONE_ENVIRONMENT')
-    )
-    _pinecone_index = pinecone.Index(os.environ.get('PINECONE_INDEX_NAME'))
+    # Initialize Pinecone (Required) - Updated to new API
+    from pinecone import Pinecone
+    pc = Pinecone(api_key=os.environ.get('PINECONE_API_KEY'))
+    _pinecone_index = pc.Index(os.environ.get('PINECONE_INDEX_NAME'))
     
     # Store Pinecone configuration for validation
     _pinecone_host = os.environ.get('PINECONE_HOST')
