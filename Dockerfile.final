@@ -51,7 +51,7 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
-# Simple test entrypoint to see if container starts
-ENTRYPOINT ["python", "-c", "print('=== CONTAINER STARTED ==='); import sys; print('Python version:', sys.version); print('Python path:', sys.path); print('=== TESTING IMPORTS ==='); import os; print('os imported'); import json; print('json imported'); print('=== BASIC IMPORTS WORK ===')"]
+# Ultra-simple test entrypoint
+ENTRYPOINT ["python", "-c", "print('CONTAINER STARTED')"]
 # Trigger full deployment
 # Trigger fresh build with current code
