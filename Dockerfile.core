@@ -31,5 +31,23 @@ RUN python -m pip install --no-cache-dir \
 # Copy application code
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 
-# Set the ENTRYPOINT to your handler (adjust as needed)
-ENTRYPOINT ["lambda_handlers.lambda_handler_knowledge_chat"]
+# Add startup logging to debug entrypoint issues
+RUN echo "#!/bin/bash" > /tmp/startup.sh && \
+    echo "echo '=== CONTAINER STARTUP DEBUG ==='" >> /tmp/startup.sh && \
+    echo "echo 'Current directory: \$(pwd)'" >> /tmp/startup.sh && \
+    echo "echo 'Python version: \$(python --version)'" >> /tmp/startup.sh && \
+    echo "echo 'Python path: \$(which python)'" >> /tmp/startup.sh && \
+    echo "echo 'Files in current directory:'" >> /tmp/startup.sh && \
+    echo "ls -la" >> /tmp/startup.sh && \
+    echo "echo 'Files in /var/task:'" >> /tmp/startup.sh && \
+    echo "ls -la /var/task/" >> /tmp/startup.sh && \
+    echo "echo 'Testing Python import:'" >> /tmp/startup.sh && \
+    echo "python -c 'import sys; print(\"Python path:\", sys.path)'" >> /tmp/startup.sh && \
+    echo "echo 'Testing lambda_handlers import:'" >> /tmp/startup.sh && \
+    echo "python -c 'import lambda_handlers; print(\"lambda_handlers imported successfully\")'" >> /tmp/startup.sh && \
+    echo "echo '=== STARTING LAMBDA HANDLER ==='" >> /tmp/startup.sh && \
+    echo "exec python -m lambda_handlers.lambda_handler_knowledge_chat" >> /tmp/startup.sh && \
+    chmod +x /tmp/startup.sh
+
+# Set the ENTRYPOINT to our debug startup script
+ENTRYPOINT ["/tmp/startup.sh"]
