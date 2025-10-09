@@ -1,4 +1,4 @@
-# KnowledgeBot Parallel Micro-Services Architecture
+# KnowledgeBot Micro-Services Architecture
 
 Ultra-efficient parallel Docker architecture with **zero redundancy** and **maximum parallelism** using ECR image imports.
 
@@ -69,10 +69,10 @@ jobs:
 ### **Layer Import Process**
 ```bash
 # Import base layer from ECR
-docker pull $ECR_REGISTRY/knowledgebot-parallel-ml-layer:latest
+docker pull $ECR_REGISTRY/knowledgebot-ml-layer:latest
 
 # Tag locally for service build
-docker tag $ECR_REGISTRY/knowledgebot-parallel-ml-layer:latest knowledgebot-ml-layer:latest
+docker tag $ECR_REGISTRY/knowledgebot-ml-layer:latest knowledgebot-ml-layer:latest
 
 # Build service using imported layer
 docker build -f Dockerfile.rag-search-layered -t rag-search .
@@ -186,8 +186,8 @@ async def complete_document_processing(document_bytes: bytes):
 │   └── *-handler.py (16 handler files)
 ├── requirements-*.txt (16 requirements files)
 ├── .github/workflows/
-│   └── deploy-parallel-microservices.yml
-├── build-parallel-images.sh
+│   └── deploy-microservices.yml
+├── build-images.sh
 └── README.md
 ```
 
@@ -234,7 +234,7 @@ Use OCR services:
 # Monitor all services
 for service in presigned-url s3-reader pinecone-search embedding-generator pdf-processor easyocr table-detector docling-core docling-full; do
   echo "Checking $service..."
-  curl -f https://knowledgebot-parallel-$service.lambda-url.region.on.aws/health
+  curl -f https://knowledgebot-$service.lambda-url.region.on.aws/health
 done
 ```
 
@@ -242,13 +242,13 @@ done
 ```bash
 # Check build times
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/knowledgebot-parallel-* \
+  --log-group-name /aws/lambda/knowledgebot-* \
   --filter-pattern "Build completed"
 ```
 
 ## 🎉 Summary
 
-The parallel micro-services architecture provides:
+The micro-services architecture provides:
 - **Maximum Parallelism**: 25 simultaneous child jobs in one job
 - **Zero Redundancy**: Shared base layers
 - **Ultra-Specialization**: Single-purpose services

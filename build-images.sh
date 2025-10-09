@@ -1,12 +1,12 @@
 #!/bin/bash
-# build-parallel-images.sh
+# build-images.sh
 # Build script for fully parallel Docker architecture with zero redundancy
 
 set -e
 
 # Configuration
 REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-REPOSITORY_PREFIX="knowledgebot-parallel"
+REPOSITORY_PREFIX="knowledgebot"
 TAG="${TAG:-latest}"
 
 # Colors for output
@@ -16,7 +16,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}🏗️ Building KnowledgeBot Parallel Architecture${NC}"
+echo -e "${GREEN}🏗️ Building KnowledgeBot Architecture${NC}"
 echo -e "${YELLOW}Registry: ${REGISTRY}${NC}"
 echo -e "${YELLOW}Repository Prefix: ${REPOSITORY_PREFIX}${NC}"
 echo -e "${YELLOW}Tag: ${TAG}${NC}"
@@ -75,9 +75,9 @@ build_and_push "Dockerfile.table-detector-layered" "table-detector"
 build_and_push "Dockerfile.docling-core-layered" "docling-core"
 build_and_push "Dockerfile.docling-full-layered" "docling-full"
 
-echo -e "${GREEN}🎉 All parallel images built and pushed successfully!${NC}"
+echo -e "${GREEN}🎉 All images built and pushed successfully!${NC}"
 echo ""
-echo -e "${YELLOW}📋 Parallel Architecture Summary:${NC}"
+echo -e "${YELLOW}📋 Architecture Summary:${NC}"
 echo ""
 echo -e "${BLUE}🏗️ Base Layers (9 layers):${NC}"
 echo -e "  • ${REGISTRY}/${REPOSITORY_PREFIX}-base-layer:${TAG} (~50MB)"
@@ -108,7 +108,7 @@ echo -e "  • ${REGISTRY}/${REPOSITORY_PREFIX}-table-detector:${TAG} (~455MB)"
 echo -e "  • ${REGISTRY}/${REPOSITORY_PREFIX}-docling-core:${TAG} (~555MB)"
 echo -e "  • ${REGISTRY}/${REPOSITORY_PREFIX}-docling-full:${TAG} (~1.25GB)"
 echo ""
-echo -e "${GREEN}💡 Parallel Processing Benefits:${NC}"
+echo -e "${GREEN}💡 Processing Benefits:${NC}"
 echo -e "  • All 25 builds run simultaneously"
 echo -e "  • No sequential dependencies"
 echo -e "  • Maximum GitHub Actions parallelism"

@@ -1,4 +1,4 @@
-name: Build and Deploy All Micro-Services in Parallel
+name: Build and Deploy All Micro-Services
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 env:
   AWS_REGION: ap-south-1
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
-  ECR_REPOSITORY_PREFIX: knowledgebot-parallel
+  ECR_REPOSITORY_PREFIX: knowledgebot
 
 jobs:
   # Build all layers in parallel first
@@ -246,17 +246,17 @@ jobs:
         echo "🚀 Deploying ${{ matrix.name }} microservice"
         
         # Check if function exists
-        if aws lambda get-function --function-name knowledgebot-parallel-${{ matrix.name }} >/dev/null 2>&1; then
-          echo "🔄 Updating existing microservice: knowledgebot-parallel-${{ matrix.name }}"
+        if aws lambda get-function --function-name knowledgebot-${{ matrix.name }} >/dev/null 2>&1; then
+          echo "🔄 Updating existing microservice: knowledgebot-${{ matrix.name }}"
           
           # Update function code
           aws lambda update-function-code \
-            --function-name knowledgebot-parallel-${{ matrix.name }} \
+            --function-name knowledgebot-${{ matrix.name }} \
             --image-uri $IMAGE_URI
           
           # Update function configuration
           aws lambda update-function-configuration \
-            --function-name knowledgebot-parallel-${{ matrix.name }} \
+            --function-name knowledgebot-${{ matrix.name }} \
             --memory-size ${{ matrix.memory }} \
             --timeout ${{ matrix.timeout }} \
             --environment Variables="{
@@ -271,11 +271,11 @@ jobs:
               AWS_REGION=${{ env.AWS_REGION }}
             }"
         else
-          echo "🆕 Creating new microservice: knowledgebot-parallel-${{ matrix.name }}"
+          echo "🆕 Creating new microservice: knowledgebot-${{ matrix.name }}"
           
           # Create new function
           aws lambda create-function \
-            --function-name knowledgebot-parallel-${{ matrix.name }} \
+            --function-name knowledgebot-${{ matrix.name }} \
             --package-type Image \
             --code ImageUri=$IMAGE_URI \
             --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
@@ -294,7 +294,7 @@ jobs:
             }"
         fi
         
-        echo "✅ Deployed knowledgebot-parallel-${{ matrix.name }} successfully"
+        echo "✅ Deployed knowledgebot-${{ matrix.name }} successfully"
 
     - name: Output build details
       run: |
@@ -316,37 +316,37 @@ jobs:
         echo "🎉 KnowledgeBot Single Job Parallel Micro-Services Deployment Complete!"
         echo ""
         echo "🏗️ Layers Built (9 layers):"
-        echo "  • knowledgebot-parallel-base-layer (~50MB)"
-        echo "  • knowledgebot-parallel-core-layer (~80MB)"
-        echo "  • knowledgebot-parallel-database-layer (~150MB)"
-        echo "  • knowledgebot-parallel-ml-layer (~400MB)"
-        echo "  • knowledgebot-parallel-pdf-processor-layer (~200MB)"
-        echo "  • knowledgebot-parallel-easyocr-layer (~300MB)"
-        echo "  • knowledgebot-parallel-table-detector-layer (~400MB)"
-        echo "  • knowledgebot-parallel-docling-core-layer (~500MB)"
-        echo "  • knowledgebot-parallel-docling-full-layer (~1.2GB)"
+        echo "  • knowledgebot-base-layer (~50MB)"
+        echo "  • knowledgebot-core-layer (~80MB)"
+        echo "  • knowledgebot-database-layer (~150MB)"
+        echo "  • knowledgebot-ml-layer (~400MB)"
+        echo "  • knowledgebot-pdf-processor-layer (~200MB)"
+        echo "  • knowledgebot-easyocr-layer (~300MB)"
+        echo "  • knowledgebot-table-detector-layer (~400MB)"
+        echo "  • knowledgebot-docling-core-layer (~500MB)"
+        echo "  • knowledgebot-docling-full-layer (~1.2GB)"
         echo ""
         echo "📋 Micro-Services Deployed (16 services):"
         echo ""
         echo "🔧 Core Services:"
-        echo "  • knowledgebot-parallel-presigned-url (256MB, 30s, ~55MB)"
-        echo "  • knowledgebot-parallel-s3-reader (256MB, 30s, ~85MB)"
-        echo "  • knowledgebot-parallel-pinecone-search (512MB, 60s, ~155MB)"
-        echo "  • knowledgebot-parallel-pinecone-upsert (512MB, 60s, ~155MB)"
-        echo "  • knowledgebot-parallel-neo4j-search (512MB, 60s, ~155MB)"
-        echo "  • knowledgebot-parallel-neo4j-write (512MB, 60s, ~155MB)"
-        echo "  • knowledgebot-parallel-dynamodb-crud (256MB, 30s, ~85MB)"
-        echo "  • knowledgebot-parallel-text-chunker (256MB, 30s, ~55MB)"
-        echo "  • knowledgebot-parallel-embedding-generator (1024MB, 120s, ~405MB)"
-        echo "  • knowledgebot-parallel-rag-search (1024MB, 180s, ~405MB)"
-        echo "  • knowledgebot-parallel-chat-generator (1024MB, 300s, ~405MB)"
+        echo "  • knowledgebot-presigned-url (256MB, 30s, ~55MB)"
+        echo "  • knowledgebot-s3-reader (256MB, 30s, ~85MB)"
+        echo "  • knowledgebot-pinecone-search (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-pinecone-upsert (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-neo4j-search (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-neo4j-write (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-dynamodb-crud (256MB, 30s, ~85MB)"
+        echo "  • knowledgebot-text-chunker (256MB, 30s, ~55MB)"
+        echo "  • knowledgebot-embedding-generator (1024MB, 120s, ~405MB)"
+        echo "  • knowledgebot-rag-search (1024MB, 180s, ~405MB)"
+        echo "  • knowledgebot-chat-generator (1024MB, 300s, ~405MB)"
         echo ""
         echo "📄 Granular OCR Services:"
-        echo "  • knowledgebot-parallel-pdf-processor (1024MB, 120s, ~255MB)"
-        echo "  • knowledgebot-parallel-easyocr (1024MB, 180s, ~355MB)"
-        echo "  • knowledgebot-parallel-table-detector (1024MB, 240s, ~455MB)"
-        echo "  • knowledgebot-parallel-docling-core (1024MB, 300s, ~555MB)"
-        echo "  • knowledgebot-parallel-docling-full (2048MB, 900s, ~1.25GB)"
+        echo "  • knowledgebot-pdf-processor (1024MB, 120s, ~255MB)"
+        echo "  • knowledgebot-easyocr (1024MB, 180s, ~355MB)"
+        echo "  • knowledgebot-table-detector (1024MB, 240s, ~455MB)"
+        echo "  • knowledgebot-docling-core (1024MB, 300s, ~555MB)"
+        echo "  • knowledgebot-docling-full (2048MB, 900s, ~1.25GB)"
         echo ""
         echo "⚡ Single Job Parallel Processing Benefits:"
         echo "  • All 25 builds run simultaneously in one job"
