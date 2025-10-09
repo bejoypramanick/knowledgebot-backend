@@ -8,15 +8,8 @@ ENV LC_ALL=C.UTF-8
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_CACHE_DIR=1
 
-# Install minimal system dependencies for AWS Lambda Python 3.12 (Amazon Linux 2023 uses dnf)
-# Start with minimal packages to avoid build failures
-RUN dnf update -y && \
-    dnf install -y \
-    gcc \
-    gcc-c++ \
-    make \
-    python3-devel \
-    && dnf clean all
+# Skip system dependencies - try with pre-compiled Python packages first
+# Many packages have ARM64 wheels available that don't require compilation
 
 # Upgrade pip and install core dependencies
 RUN python -m pip install --upgrade pip setuptools wheel

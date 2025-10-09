@@ -8,15 +8,8 @@ ENV LC_ALL=C.UTF-8
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_CACHE_DIR=1
 
-# Install minimal system dependencies for Docling
-# Docling handles most processing through Python packages (pypdfium2, EasyOCR, etc.)
-RUN dnf update -y && \
-    dnf install -y \
-    gcc \
-    gcc-c++ \
-    make \
-    python3-devel \
-    && dnf clean all
+# Skip system dependencies - try with pre-compiled Python packages first
+# Docling packages may have ARM64 wheels available
 
 # Upgrade pip and install core dependencies
 RUN python -m pip install --upgrade pip setuptools wheel
