@@ -22,7 +22,7 @@ logger.info("✅ Imported openai-agents modules: Agent, Runner, function_tool")
 from pydantic import BaseModel
 logger.info("✅ Imported pydantic.BaseModel")
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 logger.info("✅ Imported typing.List, Dict, Any")
 
 import time
@@ -76,32 +76,32 @@ def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> Dict[str
     return search_pinecone_crud(query_vector, limit)
 
 @function_tool
-def search_neo4j_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+def search_neo4j_tool(cypher_query: str, parameters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """CRUD: Execute Cypher query in Neo4j"""
     return search_neo4j_crud(cypher_query, parameters)
 
 @function_tool
-def read_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
+def read_dynamodb_tool(table_name: str, key: Dict[str, str]) -> Dict[str, Any]:
     """CRUD: Read item from DynamoDB table"""
     return read_dynamodb_crud(table_name, key)
 
 @function_tool
-def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, Any]]) -> Dict[str, Any]:
+def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, str]]) -> Dict[str, Any]:
     """CRUD: Batch read items from DynamoDB table"""
     return batch_read_dynamodb_crud(table_name, keys)
 
 @function_tool
-def write_dynamodb_tool(table_name: str, item: Dict[str, Any]) -> Dict[str, Any]:
+def write_dynamodb_tool(table_name: str, item: Dict[str, str]) -> Dict[str, Any]:
     """CRUD: Write item to DynamoDB table"""
     return write_dynamodb_crud(table_name, item)
 
 @function_tool
-def update_dynamodb_tool(table_name: str, key: Dict[str, Any], update_expression: str, expression_values: Dict[str, Any]) -> Dict[str, Any]:
+def update_dynamodb_tool(table_name: str, key: Dict[str, str], update_expression: str, expression_values: Dict[str, str]) -> Dict[str, Any]:
     """CRUD: Update item in DynamoDB table"""
     return update_dynamodb_crud(table_name, key, update_expression, expression_values)
 
 @function_tool
-def delete_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
+def delete_dynamodb_tool(table_name: str, key: Dict[str, str]) -> Dict[str, Any]:
     """CRUD: Delete item from DynamoDB table"""
     return delete_dynamodb_crud(table_name, key)
 
@@ -111,7 +111,7 @@ def generate_embedding_tool(text: str) -> Dict[str, Any]:
     return generate_embedding_crud(text)
 
 @function_tool
-def upsert_pinecone_tool(vectors: List[Dict[str, Any]], namespace: str = None) -> Dict[str, Any]:
+def upsert_pinecone_tool(vectors: List[Dict[str, str]], namespace: Optional[str] = None) -> Dict[str, Any]:
     """CRUD: Upsert vectors to Pinecone"""
     return upsert_pinecone_crud(vectors, namespace)
 
@@ -121,7 +121,7 @@ def delete_pinecone_tool(ids: List[str], namespace: str = None) -> Dict[str, Any
     return delete_pinecone_crud(ids, namespace)
 
 @function_tool
-def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+def execute_neo4j_write_tool(cypher_query: str, parameters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """CRUD: Execute write Cypher query in Neo4j"""
     return execute_neo4j_write_crud(cypher_query, parameters)
 
@@ -233,32 +233,32 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
 # ============================================================================
 
 @function_tool
-def rag_search_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
+def rag_search_tool(query: str, limit: int = 5, filter_dict: Optional[Dict[str, str]] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
     """RAG: Complete search pipeline with Pinecone + Neo4j + DynamoDB"""
     return rag_search_crud(query, limit, filter_dict, namespace)
 
 @function_tool
-def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, Any]], metadata: Dict[str, Any], namespace: str = None) -> Dict[str, Any]:
+def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, str]], metadata: Dict[str, str], namespace: Optional[str] = None) -> Dict[str, Any]:
     """RAG: Complete document ingestion pipeline"""
     return rag_upsert_document_crud(document_id, chunks, metadata, namespace)
 
 @function_tool
-def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict[str, Any]]:
+def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict[str, str]]:
     """RAG: Chunk document text for processing"""
     return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
 
 @function_tool
-def rag_process_document_with_docling_tool(document_path: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
+def rag_process_document_with_docling_tool(document_path: str, document_id: Optional[str] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
     """RAG: Process document using Docling with hierarchical semantic chunking"""
     return rag_process_document_with_docling_crud(document_path, document_id, namespace)
 
 @function_tool
-def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
+def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: Optional[str] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
     """RAG: Process document from bytes using Docling (useful for S3 documents)"""
     return rag_process_document_from_bytes_crud(document_bytes, filename, document_id, namespace)
 
 @function_tool
-def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
+def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: Optional[Dict[str, str]] = None, namespace: Optional[str] = None) -> Dict[str, Any]:
     """RAG: Enhanced RAG search with hierarchical context from Docling chunks"""
     return rag_search_with_hierarchical_context_crud(query, limit, filter_dict, namespace)
 
