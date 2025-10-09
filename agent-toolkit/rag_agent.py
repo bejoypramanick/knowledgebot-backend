@@ -16,11 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("✅ Configured logging in rag_agent")
 
-from agents import function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig
-logger.info("✅ Imported agents modules: function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig")
-
-from openai.types.shared.reasoning import Reasoning
-logger.info("✅ Imported openai.types.shared.reasoning.Reasoning")
+from openai_agents import function_tool, Agent, Runner
+logger.info("✅ Imported openai_agents modules: function_tool, Agent, Runner")
 
 from pydantic import BaseModel
 logger.info("✅ Imported pydantic.BaseModel")
@@ -404,15 +401,7 @@ When you receive any query, immediately begin your intelligent analysis and use 
         rag_process_document_with_docling_tool,
         rag_process_document_from_bytes_tool,
         rag_search_with_hierarchical_context_tool
-    ],
-    model_settings=ModelSettings(
-        temperature=0.1,
-        parallel_tool_calls=True,
-        max_tokens=4096,
-        reasoning=Reasoning(
-            effort="high"
-        )
-    )
+    ]
 )
 
 class CRUDAgentInput(BaseModel):
@@ -431,7 +420,7 @@ async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[st
     
     try:
         # Create conversation history for the agent
-        conversation_history: List[TResponseInputItem] = [
+        conversation_history: List[Dict[str, Any]] = [
             {
                 "role": "user",
                 "content": [
@@ -446,21 +435,12 @@ async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[st
         # Run the unified CRUD agent
         crud_result = await Runner.run(
             rag_agent,
-            input=conversation_history,
-            run_config=RunConfig(trace_metadata={
-                "__trace_source__": "agent-builder",
-                "workflow_id": "unified_crud_processing",
-                "conversation_id": workflow_input.conversation_id
-            })
+            input=workflow_input.user_query
         )
 
-        conversation_history.extend([item.to_input_item() for item in crud_result.new_items])
-
-        processing_time = time.time() - start_time
-        
         # Extract the final response
         try:
-            final_response = crud_result.final_output_as(str)
+            final_response = crud_result.final_output
         except Exception as e:
             final_response = f"Error generating response: {str(e)}"
         
