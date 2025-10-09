@@ -16,6 +16,7 @@ jobs:
   # Single build job with parallel child jobs inside
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: chatbot
     strategy:
       matrix:
         include:
@@ -320,6 +321,7 @@ jobs:
   deployment-summary:
     needs: build-and-deploy
     runs-on: ubuntu-latest
+    environment: chatbot
     if: github.ref == 'refs/heads/main'
     
     steps:
