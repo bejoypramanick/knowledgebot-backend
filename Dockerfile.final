@@ -60,3 +60,4 @@ CMD ["lambda_handlers.lambda_handler"]
 # Trigger full deployment
 # Trigger fresh build with current code
 # Fresh deployment triggered after ECR cleanup - $(date)
+# Added presigned URL functionality - Thu Oct 09 18:33:00 UTC 2025

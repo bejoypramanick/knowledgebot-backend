@@ -32,12 +32,130 @@ logger.info("✅ Imported typing.Dict, Any")
 import traceback
 logger.info("✅ Imported traceback module")
 
-from datetime import datetime
+from datetime import datetime, timedelta
 logger.info("✅ Imported datetime module")
+
+import boto3
+logger.info("✅ Imported boto3 module")
+
+import uuid
+logger.info("✅ Imported uuid module")
 
 # Import our RAG agent
 from rag_agent import run_unified_crud_processing, CRUDAgentInput
 logger.info("✅ Imported rag_agent modules: run_unified_crud_processing, CRUDAgentInput")
+
+# Initialize AWS clients
+s3_client = boto3.client('s3')
+logger.info("✅ Initialized S3 client")
+
+async def generate_presigned_url_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Generate presigned URL for document upload"""
+    logger.info("=== PRESIGNED URL GENERATION HANDLER STARTED ===")
+    logger.info(f"Event: {json.dumps(event, default=str)}")
+    
+    try:
+        # Parse request body
+        if isinstance(event.get('body'), str):
+            body = json.loads(event['body'])
+        else:
+            body = event.get('body', {})
+        
+        # Extract parameters
+        filename = body.get('filename', '')
+        content_type = body.get('content_type', 'application/octet-stream')
+        metadata = body.get('metadata', {})
+        
+        if not filename:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS"
+                },
+                "body": json.dumps({
+                    "error": "Filename is required"
+                })
+            }
+        
+        # Generate unique document ID and S3 key
+        document_id = str(uuid.uuid4())
+        timestamp = datetime.now().strftime("%Y/%m/%d")
+        s3_key = f"documents/{timestamp}/{document_id}/{filename}"
+        
+        # Get S3 bucket from environment
+        bucket_name = os.environ.get('DOCUMENTS_BUCKET', 'chatbot-documents-ap-south-1')
+        
+        # Generate presigned URL with CORS headers
+        presigned_url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': bucket_name,
+                'Key': s3_key,
+                'ContentType': content_type,
+                'Metadata': {
+                    'document_id': document_id,
+                    'original_filename': filename,
+                    'title': metadata.get('title', filename),
+                    'category': metadata.get('category', 'general'),
+                    'author': metadata.get('author', 'unknown'),
+                    'upload_timestamp': datetime.now().isoformat()
+                }
+            },
+            ExpiresIn=3600  # 1 hour expiration
+        )
+        
+        logger.info(f"Generated presigned URL for document: {document_id}")
+        logger.info(f"S3 Key: {s3_key}")
+        logger.info(f"Bucket: {bucket_name}")
+        
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+                "Access-Control-Allow-Methods": "POST, OPTIONS"
+            },
+            "body": json.dumps({
+                "presigned_url": presigned_url,
+                "document_id": document_id,
+                "s3_key": s3_key,
+                "bucket": bucket_name,
+                "expires_in": 3600,
+                "metadata": {
+                    "document_id": document_id,
+                    "original_filename": filename,
+                    "title": metadata.get('title', filename),
+                    "category": metadata.get('category', 'general'),
+                    "author": metadata.get('author', 'unknown'),
+                    "upload_timestamp": datetime.now().isoformat()
+                }
+            })
+        }
+        
+    except Exception as e:
+        logger.error("=== ERROR IN PRESIGNED URL GENERATION ===")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+                "Access-Control-Allow-Methods": "POST, OPTIONS"
+            },
+            "body": json.dumps({
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": traceback.format_exc()
+            })
+        }
 
 async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Knowledge chat handler - all business logic handled by AgentBuilder model"""
@@ -236,6 +354,21 @@ def lambda_handler_knowledge_chat(event: Dict[str, Any], context: Any) -> Dict[s
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
+def lambda_handler_presigned_url(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Synchronous wrapper for presigned URL generation handler"""
+    logger.info("=== LAMBDA HANDLER PRESIGNED URL STARTED ===")
+    logger.info(f"Event: {json.dumps(event, default=str)}")
+    logger.info(f"Context: {context}")
+    
+    try:
+        result = asyncio.run(generate_presigned_url_handler_async(event, context))
+        logger.info(f"Presigned URL handler result: {json.dumps(result, default=str)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in lambda_handler_presigned_url: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
+
 def lambda_handler_knowledge_document_ingestion(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Synchronous wrapper for knowledge document ingestion handler"""
     logger.info("=== LAMBDA HANDLER DOCUMENT INGESTION STARTED ===")
@@ -267,6 +400,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 },
                 'body': ''
             }
+        
+        # Check if this is a presigned URL request
+        if event.get('httpMethod') == 'POST':
+            try:
+                # Parse request body to check for presigned URL action
+                if isinstance(event.get('body'), str):
+                    body = json.loads(event['body'])
+                else:
+                    body = event.get('body', {})
+                
+                # Check if this is a presigned URL request
+                if body.get('action') == 'get-upload-url':
+                    logger.info("Processing presigned URL request")
+                    return lambda_handler_presigned_url(event, context)
+            except (json.JSONDecodeError, KeyError):
+                # If we can't parse the body, continue with normal flow
+                pass
         
         # Check if this is an S3 event (document processing)
         if 'Records' in event and event['Records']:
