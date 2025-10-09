@@ -7,7 +7,7 @@ All rights reserved. Commercial use prohibited without written permission.
 Contact: bejoy.pramanick@globistaan.com for licensing inquiries.
 """
 
-from agents import function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig
+from openai.agents import function_tool, Agent, ModelSettings, TResponseInputItem, Runner, RunConfig
 from openai.types.shared.reasoning import Reasoning
 from pydantic import BaseModel
 from typing import List, Dict, Any
