@@ -30,7 +30,7 @@ RUN python -m pip install --no-cache-dir \
     openai-agents>=0.3.3 \
     sentence-transformers>=2.2.2 \
     torch>=2.1.0 \
-    numpy>=1.26.0,<2.0.0
+    "numpy>=1.26.0,<2.0.0"
 
 # Create a marker file to identify this layer
 RUN echo "knowledgebot-ml-layer-$(date +%s)" > /tmp/layer-marker
