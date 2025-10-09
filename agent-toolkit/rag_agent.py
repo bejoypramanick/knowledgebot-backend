@@ -163,9 +163,10 @@ class DocumentBytesProcessingRequest(BaseModel):
 # ============================================================================
 
 @function_tool
-def read_s3_data_tool(bucket: str, key: str) -> Dict[str, Any]:
+def read_s3_data_tool(bucket: str, key: str) -> GenericResponse:
     """CRUD: Read data from S3 bucket"""
-    return read_s3_data_crud(bucket, key)
+    result = read_s3_data_crud(bucket, key)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
 def search_pinecone_tool(request: SearchPineconeRequest) -> GenericResponse:
@@ -186,24 +187,28 @@ def read_dynamodb_tool(request: DynamoDBKeyRequest) -> GenericResponse:
     return GenericResponse(success=True, data=result)
 
 @function_tool
-def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, Any]]) -> Dict[str, Any]:
+def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, Any]]) -> GenericResponse:
     """CRUD: Batch read items from DynamoDB table"""
-    return batch_read_dynamodb_crud(table_name, keys)
+    result = batch_read_dynamodb_crud(table_name, keys)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def write_dynamodb_tool(table_name: str, item: Dict[str, Any]) -> Dict[str, Any]:
+def write_dynamodb_tool(request: DynamoDBWriteRequest) -> GenericResponse:
     """CRUD: Write item to DynamoDB table"""
-    return write_dynamodb_crud(table_name, item)
+    result = write_dynamodb_crud(request.table_name, request.item)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def update_dynamodb_tool(table_name: str, key: Dict[str, Any], update_expression: str, expression_values: Dict[str, Any]) -> Dict[str, Any]:
+def update_dynamodb_tool(request: DynamoDBUpdateRequest) -> GenericResponse:
     """CRUD: Update item in DynamoDB table"""
-    return update_dynamodb_crud(table_name, key, update_expression, expression_values)
+    result = update_dynamodb_crud(request.table_name, request.key, request.update_expression, request.expression_values)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def delete_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
+def delete_dynamodb_tool(request: DynamoDBKeyRequest) -> GenericResponse:
     """CRUD: Delete item from DynamoDB table"""
-    return delete_dynamodb_crud(table_name, key)
+    result = delete_dynamodb_crud(request.table_name, request.key)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
 def generate_embedding_tool(request: EmbeddingRequest) -> GenericResponse:
@@ -212,26 +217,29 @@ def generate_embedding_tool(request: EmbeddingRequest) -> GenericResponse:
     return GenericResponse(success=True, data=result)
 
 @function_tool
-def upsert_pinecone_tool(vectors: List[Dict[str, Any]], namespace: str = None) -> Dict[str, Any]:
+def upsert_pinecone_tool(request: PineconeUpsertRequest) -> GenericResponse:
     """CRUD: Upsert vectors to Pinecone"""
-    return upsert_pinecone_crud(vectors, namespace)
+    result = upsert_pinecone_crud(request.vectors, request.namespace)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def delete_pinecone_tool(ids: List[str], namespace: str = None) -> Dict[str, Any]:
+def delete_pinecone_tool(request: PineconeDeleteRequest) -> GenericResponse:
     """CRUD: Delete vectors from Pinecone"""
-    return delete_pinecone_crud(ids, namespace)
+    result = delete_pinecone_crud(request.ids, request.namespace)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def execute_neo4j_write_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+def execute_neo4j_write_tool(request: Neo4jWriteRequest) -> GenericResponse:
     """CRUD: Execute write Cypher query in Neo4j"""
-    return execute_neo4j_write_crud(cypher_query, parameters)
+    result = execute_neo4j_write_crud(request.cypher_query, request.parameters)
+    return GenericResponse(success=True, data=result)
 
 # ============================================================================
 # QUERY DECOMPOSITION TOOLS
 # ============================================================================
 
 @function_tool
-def decompose_query_tool(user_query: str) -> Dict[str, Any]:
+def decompose_query_tool(request: QueryDecompositionRequest) -> GenericResponse:
     """
     Decompose complex user queries into individual sub-questions
     
@@ -248,7 +256,7 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
         decomposition_prompt = f"""
         Analyze the following user query and break it down into individual, specific questions if it contains multiple questions or complex requests.
 
-        User Query: "{user_query}"
+        User Query: "{request.user_query}"
 
         Instructions:
         1. If the query contains multiple questions, separate them into individual questions
@@ -300,34 +308,31 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
                 "is_multi_part": False,
                 "sub_questions": [
                     {
-                        "question": user_query,
+                        "question": request.user_query,
                         "question_type": "factual",
                         "priority": 1,
                         "context": "Original query"
                     }
                 ],
-                "original_query": user_query,
+                "original_query": request.user_query,
                 "decomposition_notes": "Could not parse decomposition, treating as single question"
             }
         
-        return {
-            "success": True,
+        return GenericResponse(success=True, data={
             "decomposition": decomposition_data,
             "sub_question_count": len(decomposition_data.get("sub_questions", [])),
             "is_multi_part": decomposition_data.get("is_multi_part", False)
-        }
+        })
         
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
+        return GenericResponse(success=False, error=str(e), data={
             "decomposition": {
                 "is_multi_part": False,
-                "sub_questions": [{"question": user_query, "question_type": "factual", "priority": 1, "context": "Original query"}],
-                "original_query": user_query,
+                "sub_questions": [{"question": request.user_query, "question_type": "factual", "priority": 1, "context": "Original query"}],
+                "original_query": request.user_query,
                 "decomposition_notes": f"Error in decomposition: {str(e)}"
             }
-        }
+        })
 
 # ============================================================================
 # PRODUCTION RAG TOOLS
@@ -340,29 +345,34 @@ def rag_search_tool(request: RAGSearchRequest) -> GenericResponse:
     return GenericResponse(success=True, data=result)
 
 @function_tool
-def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, Any]], metadata: Dict[str, Any], namespace: str = None) -> Dict[str, Any]:
+def rag_upsert_document_tool(request: DocumentUpsertRequest) -> GenericResponse:
     """RAG: Complete document ingestion pipeline"""
-    return rag_upsert_document_crud(document_id, chunks, metadata, namespace)
+    result = rag_upsert_document_crud(request.document_id, request.chunks, request.metadata, request.namespace)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def rag_chunk_document_tool(document_text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict[str, Any]]:
+def rag_chunk_document_tool(request: DocumentChunkRequest) -> GenericResponse:
     """RAG: Chunk document text for processing"""
-    return rag_chunk_document_crud(document_text, chunk_size, chunk_overlap)
+    result = rag_chunk_document_crud(request.document_text, request.chunk_size, request.chunk_overlap)
+    return GenericResponse(success=True, data={"chunks": result})
 
 @function_tool
-def rag_process_document_with_docling_tool(document_path: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
+def rag_process_document_with_docling_tool(request: DocumentProcessingRequest) -> GenericResponse:
     """RAG: Process document using Docling with hierarchical semantic chunking"""
-    return rag_process_document_with_docling_crud(document_path, document_id, namespace)
+    result = rag_process_document_with_docling_crud(request.document_path, request.document_id, request.namespace)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def rag_process_document_from_bytes_tool(document_bytes: bytes, filename: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
+def rag_process_document_from_bytes_tool(request: DocumentBytesProcessingRequest) -> GenericResponse:
     """RAG: Process document from bytes using Docling (useful for S3 documents)"""
-    return rag_process_document_from_bytes_crud(document_bytes, filename, document_id, namespace)
+    result = rag_process_document_from_bytes_crud(request.document_bytes, request.filename, request.document_id, request.namespace)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
+def rag_search_with_hierarchical_context_tool(request: RAGSearchRequest) -> GenericResponse:
     """RAG: Enhanced RAG search with hierarchical context from Docling chunks"""
-    return rag_search_with_hierarchical_context_crud(query, limit, filter_dict, namespace)
+    result = rag_search_with_hierarchical_context_crud(request.query, request.limit, request.filter_dict, request.namespace)
+    return GenericResponse(success=True, data=result)
 
 # ============================================================================
 # RAG AGENT - PRODUCTION RAG PIPELINE
