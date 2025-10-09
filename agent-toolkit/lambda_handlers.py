@@ -13,29 +13,49 @@ import os
 import asyncio
 from typing import Dict, Any
 import logging
+import traceback
+from datetime import datetime
 
 # Import our RAG agent
-from rag_agent import run_rag_processing, RAGAgentInput
+from rag_agent import run_unified_crud_processing, CRUDAgentInput
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging with detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Knowledge chat handler - all business logic handled by AgentBuilder model"""
+    logger.info("=== KNOWLEDGE CHAT HANDLER STARTED ===")
+    logger.info(f"Event received: {json.dumps(event, default=str)}")
+    logger.info(f"Context: {context}")
+    
     try:
+        logger.info("Step 1: Extracting query from event")
         # Extract query from event
         if 'body' in event:
+            logger.info("Body found in event, parsing JSON")
             body = json.loads(event['body'])
         else:
+            logger.info("No body in event, using event directly")
             body = event
+        
+        logger.info(f"Parsed body: {json.dumps(body, default=str)}")
         
         user_query = body.get('message', body.get('user_query', ''))
         conversation_id = body.get('conversation_id', '')
         conversation_history = body.get('conversation_history', [])
         user_preferences = body.get('user_preferences', {})
         
+        logger.info(f"Extracted - User query: {user_query}")
+        logger.info(f"Extracted - Conversation ID: {conversation_id}")
+        logger.info(f"Extracted - Conversation history length: {len(conversation_history)}")
+        logger.info(f"Extracted - User preferences: {user_preferences}")
+        
         if not user_query:
+            logger.error("No user query provided")
             return {
                 "statusCode": 400,
                 "body": json.dumps({
@@ -43,6 +63,7 @@ async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> D
                 })
             }
         
+        logger.info("Step 2: Creating CRUDAgentInput")
         # Create knowledge agent input
         knowledge_input = CRUDAgentInput(
             user_query=user_query,
@@ -50,9 +71,27 @@ async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> D
             conversation_id=conversation_id,
             user_preferences=user_preferences
         )
+        logger.info(f"Created CRUDAgentInput: {knowledge_input}")
         
+        logger.info("Step 3: Running unified CRUD processing")
         # Run the knowledge processing
         result = await run_unified_crud_processing(knowledge_input)
+        logger.info(f"Processing result: {json.dumps(result, default=str)}")
+        
+        logger.info("Step 4: Preparing success response")
+        response_body = {
+            "response": result.get("response", ""),
+            "sources": result.get("sources", []),
+            "conversation_id": result.get("conversation_id", conversation_id),
+            "processing_time": result.get("processing_time", 0),
+            "workflow_type": result.get("workflow_type", "knowledge_processing"),
+            "agent_used": result.get("agent_used", "knowledge_agent"),
+            "tools_used": result.get("tools_used", "crud_only"),
+            "business_logic": result.get("business_logic", "ai_handled"),
+            "timestamp": datetime.now().isoformat(),
+            "needs_clarification": False
+        }
+        logger.info(f"Success response body: {json.dumps(response_body, default=str)}")
         
         return {
             "statusCode": 200,
@@ -62,22 +101,28 @@ async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> D
                 "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
                 "Access-Control-Allow-Methods": "POST, OPTIONS"
             },
-            "body": json.dumps({
-                "response": result.get("response", ""),
-                "sources": result.get("sources", []),
-                "conversation_id": result.get("conversation_id", conversation_id),
-                "processing_time": result.get("processing_time", 0),
-                "workflow_type": result.get("workflow_type", "knowledge_processing"),
-                "agent_used": result.get("agent_used", "knowledge_agent"),
-                "tools_used": result.get("tools_used", "crud_only"),
-                "business_logic": result.get("business_logic", "ai_handled"),
-                "timestamp": datetime.now().isoformat(),
-                "needs_clarification": False
-            })
+            "body": json.dumps(response_body)
         }
         
     except Exception as e:
-        logger.error(f"Error in knowledge chat handler: {e}")
+        logger.error("=== ERROR IN KNOWLEDGE CHAT HANDLER ===")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        error_response = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc(),
+            "response": "I apologize, but I encountered an error while processing your request. Please try again.",
+            "sources": [],
+            "conversation_id": "",
+            "processing_time": 0,
+            "workflow_type": "knowledge_processing",
+            "agent_used": "knowledge_agent"
+        }
+        logger.error(f"Error response: {json.dumps(error_response, default=str)}")
+        
         return {
             "statusCode": 500,
             "headers": {
@@ -86,15 +131,7 @@ async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> D
                 "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
                 "Access-Control-Allow-Methods": "POST, OPTIONS"
             },
-            "body": json.dumps({
-                "error": str(e),
-                "response": "I apologize, but I encountered an error while processing your request. Please try again.",
-                "sources": [],
-                "conversation_id": "",
-                "processing_time": 0,
-                "workflow_type": "knowledge_processing",
-                "agent_used": "knowledge_agent"
-            })
+            "body": json.dumps(error_response)
         }
 
 async def knowledge_document_ingestion_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -151,24 +188,55 @@ async def knowledge_document_ingestion_handler_async(event: Dict[str, Any], cont
         }
         
     except Exception as e:
-        logger.error(f"Error in knowledge document ingestion handler: {e}")
+        logger.error("=== ERROR IN DOCUMENT INGESTION HANDLER ===")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        error_response = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc(),
+            "status": "failed",
+            "workflow_type": "unified_crud_processing"
+        }
+        logger.error(f"Error response: {json.dumps(error_response, default=str)}")
+        
         return {
             "statusCode": 500,
-            "body": json.dumps({
-                "error": str(e),
-                "status": "failed",
-                "workflow_type": "unified_crud_processing"
-            })
+            "body": json.dumps(error_response)
         }
 
 # Synchronous wrappers for Lambda
 def lambda_handler_knowledge_chat(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Synchronous wrapper for knowledge chat handler"""
-    return asyncio.run(knowledge_chat_handler_async(event, context))
+    logger.info("=== LAMBDA HANDLER KNOWLEDGE CHAT STARTED ===")
+    logger.info(f"Event: {json.dumps(event, default=str)}")
+    logger.info(f"Context: {context}")
+    
+    try:
+        result = asyncio.run(knowledge_chat_handler_async(event, context))
+        logger.info(f"Chat handler result: {json.dumps(result, default=str)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in lambda_handler_knowledge_chat: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
 def lambda_handler_knowledge_document_ingestion(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Synchronous wrapper for knowledge document ingestion handler"""
-    return asyncio.run(knowledge_document_ingestion_handler_async(event, context))
+    logger.info("=== LAMBDA HANDLER DOCUMENT INGESTION STARTED ===")
+    logger.info(f"Event: {json.dumps(event, default=str)}")
+    logger.info(f"Context: {context}")
+    
+    try:
+        result = asyncio.run(knowledge_document_ingestion_handler_async(event, context))
+        logger.info(f"Document ingestion handler result: {json.dumps(result, default=str)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in lambda_handler_knowledge_document_ingestion: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
 # Main Lambda handler (can be used for both chat and document processing)
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -199,29 +267,60 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return lambda_handler_knowledge_chat(event, context)
         
     except Exception as e:
-        logger.error(f"Error in main lambda handler: {e}")
+        logger.error("=== ERROR IN MAIN LAMBDA HANDLER ===")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        error_response = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc(),
+            "response": "I apologize, but I encountered an error while processing your request.",
+            "sources": [],
+            "conversation_id": "",
+            "processing_time": 0,
+            "workflow_type": "knowledge_processing",
+            "agent_used": "knowledge_agent"
+        }
+        logger.error(f"Error response: {json.dumps(error_response, default=str)}")
+        
         return {
             "statusCode": 500,
             "headers": {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*"
             },
-            "body": json.dumps({
-                "error": str(e),
-                "response": "I apologize, but I encountered an error while processing your request.",
-                "sources": [],
-                "conversation_id": "",
-                "processing_time": 0,
-                "workflow_type": "knowledge_processing",
-                "agent_used": "knowledge_agent"
-            })
+            "body": json.dumps(error_response)
         }
 
 # Alternative handlers for specific use cases
 def chat_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Dedicated chat Lambda handler"""
-    return lambda_handler_knowledge_chat(event, context)
+    logger.info("=== CHAT LAMBDA HANDLER STARTED ===")
+    logger.info(f"Event: {json.dumps(event, default=str)}")
+    logger.info(f"Context: {context}")
+    
+    try:
+        result = lambda_handler_knowledge_chat(event, context)
+        logger.info(f"Chat lambda handler result: {json.dumps(result, default=str)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in chat_lambda_handler: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
 def document_ingestion_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Dedicated document ingestion Lambda handler"""
-    return lambda_handler_knowledge_document_ingestion(event, context)
+    logger.info("=== DOCUMENT INGESTION LAMBDA HANDLER STARTED ===")
+    logger.info(f"Event: {json.dumps(event, default=str)}")
+    logger.info(f"Context: {context}")
+    
+    try:
+        result = lambda_handler_knowledge_document_ingestion(event, context)
+        logger.info(f"Document ingestion lambda handler result: {json.dumps(result, default=str)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in document_ingestion_lambda_handler: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
