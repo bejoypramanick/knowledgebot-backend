@@ -22,11 +22,11 @@ logger.info("✅ Imported agents modules: function_tool, Agent, ModelSettings, T
 from openai.types.shared.reasoning import Reasoning
 logger.info("✅ Imported openai.types.shared.reasoning.Reasoning")
 
-from pydantic import BaseModel
-logger.info("✅ Imported pydantic.BaseModel")
+from pydantic import BaseModel, Field
+logger.info("✅ Imported pydantic.BaseModel, Field")
 
-from typing import List, Dict, Any
-logger.info("✅ Imported typing.List, Dict, Any")
+from typing import List, Dict, Any, Optional
+logger.info("✅ Imported typing.List, Dict, Any, Optional")
 
 import time
 logger.info("✅ Imported time module")
@@ -65,6 +65,100 @@ from rag_operations import (
 logger.info("✅ Imported rag_operations modules")
 
 # ============================================================================
+# PYDANTIC MODELS FOR FUNCTION TOOLS (Pydantic 2.x Compatible)
+# ============================================================================
+
+class GenericResponse(BaseModel):
+    """Generic response model for function tools"""
+    success: bool = Field(description="Whether the operation was successful")
+    data: Optional[Dict[str, Any]] = Field(default=None, description="Response data")
+    error: Optional[str] = Field(default=None, description="Error message if any")
+    message: Optional[str] = Field(default=None, description="Additional message")
+
+class SearchPineconeRequest(BaseModel):
+    """Request model for Pinecone search"""
+    query_vector: List[float] = Field(description="Query vector for search")
+    limit: int = Field(default=10, description="Maximum number of results")
+
+class SearchNeo4jRequest(BaseModel):
+    """Request model for Neo4j search"""
+    cypher_query: str = Field(description="Cypher query to execute")
+    parameters: Optional[Dict[str, Any]] = Field(default=None, description="Query parameters")
+
+class DynamoDBKeyRequest(BaseModel):
+    """Request model for DynamoDB operations with key"""
+    table_name: str = Field(description="DynamoDB table name")
+    key: Dict[str, Any] = Field(description="Item key")
+
+class DynamoDBWriteRequest(BaseModel):
+    """Request model for DynamoDB write operations"""
+    table_name: str = Field(description="DynamoDB table name")
+    item: Dict[str, Any] = Field(description="Item to write")
+
+class DynamoDBUpdateRequest(BaseModel):
+    """Request model for DynamoDB update operations"""
+    table_name: str = Field(description="DynamoDB table name")
+    key: Dict[str, Any] = Field(description="Item key")
+    update_expression: str = Field(description="Update expression")
+    expression_values: Dict[str, Any] = Field(description="Expression values")
+
+class EmbeddingRequest(BaseModel):
+    """Request model for embedding generation"""
+    text: str = Field(description="Text to generate embedding for")
+
+class PineconeUpsertRequest(BaseModel):
+    """Request model for Pinecone upsert operations"""
+    vectors: List[Dict[str, Any]] = Field(description="Vectors to upsert")
+    namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
+
+class PineconeDeleteRequest(BaseModel):
+    """Request model for Pinecone delete operations"""
+    ids: List[str] = Field(description="Vector IDs to delete")
+    namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
+
+class Neo4jWriteRequest(BaseModel):
+    """Request model for Neo4j write operations"""
+    cypher_query: str = Field(description="Cypher query to execute")
+    parameters: Optional[Dict[str, Any]] = Field(default=None, description="Query parameters")
+
+class QueryDecompositionRequest(BaseModel):
+    """Request model for query decomposition"""
+    user_query: str = Field(description="User query to decompose")
+
+class RAGSearchRequest(BaseModel):
+    """Request model for RAG search"""
+    query: str = Field(description="Search query")
+    limit: int = Field(default=5, description="Maximum number of results")
+    filter_dict: Optional[Dict[str, Any]] = Field(default=None, description="Filter criteria")
+    namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
+
+class DocumentUpsertRequest(BaseModel):
+    """Request model for document upsert"""
+    document_id: str = Field(description="Document ID")
+    chunks: List[Dict[str, Any]] = Field(description="Document chunks")
+    metadata: Dict[str, Any] = Field(description="Document metadata")
+    namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
+
+class DocumentChunkRequest(BaseModel):
+    """Request model for document chunking"""
+    document_text: str = Field(description="Document text to chunk")
+    chunk_size: int = Field(default=1000, description="Chunk size")
+    chunk_overlap: int = Field(default=200, description="Chunk overlap")
+
+class DocumentProcessingRequest(BaseModel):
+    """Request model for document processing"""
+    document_path: str = Field(description="Path to document")
+    document_id: Optional[str] = Field(default=None, description="Document ID")
+    namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
+
+class DocumentBytesProcessingRequest(BaseModel):
+    """Request model for document processing from bytes"""
+    document_bytes: bytes = Field(description="Document content as bytes")
+    filename: str = Field(description="Original filename")
+    document_id: Optional[str] = Field(default=None, description="Document ID")
+    namespace: Optional[str] = Field(default=None, description="Pinecone namespace")
+
+# ============================================================================
 # CRUD TOOLS ONLY - NO BUSINESS LOGIC
 # ============================================================================
 
@@ -74,19 +168,22 @@ def read_s3_data_tool(bucket: str, key: str) -> Dict[str, Any]:
     return read_s3_data_crud(bucket, key)
 
 @function_tool
-def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> Dict[str, Any]:
+def search_pinecone_tool(request: SearchPineconeRequest) -> GenericResponse:
     """CRUD: Search Pinecone vector database"""
-    return search_pinecone_crud(query_vector, limit)
+    result = search_pinecone_crud(request.query_vector, request.limit)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def search_neo4j_tool(cypher_query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+def search_neo4j_tool(request: SearchNeo4jRequest) -> GenericResponse:
     """CRUD: Execute Cypher query in Neo4j"""
-    return search_neo4j_crud(cypher_query, parameters)
+    result = search_neo4j_crud(request.cypher_query, request.parameters)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
-def read_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]:
+def read_dynamodb_tool(request: DynamoDBKeyRequest) -> GenericResponse:
     """CRUD: Read item from DynamoDB table"""
-    return read_dynamodb_crud(table_name, key)
+    result = read_dynamodb_crud(request.table_name, request.key)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
 def batch_read_dynamodb_tool(table_name: str, keys: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -109,9 +206,10 @@ def delete_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> Dict[str, Any]
     return delete_dynamodb_crud(table_name, key)
 
 @function_tool
-def generate_embedding_tool(text: str) -> Dict[str, Any]:
+def generate_embedding_tool(request: EmbeddingRequest) -> GenericResponse:
     """CRUD: Generate embedding vector for text"""
-    return generate_embedding_crud(text)
+    result = generate_embedding_crud(request.text)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
 def upsert_pinecone_tool(vectors: List[Dict[str, Any]], namespace: str = None) -> Dict[str, Any]:
@@ -236,9 +334,10 @@ def decompose_query_tool(user_query: str) -> Dict[str, Any]:
 # ============================================================================
 
 @function_tool
-def rag_search_tool(query: str, limit: int = 5, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
+def rag_search_tool(request: RAGSearchRequest) -> GenericResponse:
     """RAG: Complete search pipeline with Pinecone + Neo4j + DynamoDB"""
-    return rag_search_crud(query, limit, filter_dict, namespace)
+    result = rag_search_crud(request.query, request.limit, request.filter_dict, request.namespace)
+    return GenericResponse(success=True, data=result)
 
 @function_tool
 def rag_upsert_document_tool(document_id: str, chunks: List[Dict[str, Any]], metadata: Dict[str, Any], namespace: str = None) -> Dict[str, Any]:
