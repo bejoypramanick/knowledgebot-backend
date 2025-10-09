@@ -96,7 +96,7 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         echo "🐳 Building core dependencies image..."
-        docker build --platform linux/arm64 -f Dockerfile.core -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:core-$IMAGE_TAG .
+        docker build -f Dockerfile.core -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:core-$IMAGE_TAG .
         docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:core-$IMAGE_TAG
         echo "✅ Core image built and pushed successfully"
 
@@ -148,7 +148,7 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         echo "🐳 Building Docling image..."
-        docker build --platform linux/arm64 -f Dockerfile.docling -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG .
+        docker build -f Dockerfile.docling -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG .
         docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:docling-$IMAGE_TAG
         echo "✅ Docling image built and pushed successfully"
 
@@ -201,7 +201,7 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         echo "🐳 Building final application image..."
-        docker build --platform linux/arm64 -f Dockerfile.final -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG .
+        docker build -f Dockerfile.final -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG .
         docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:final-$IMAGE_TAG
         echo "✅ Final image built and pushed successfully"
 
@@ -322,7 +322,7 @@ jobs:
               --function-name knowledgebot-chat \
               --package-type Image \
               --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$FINAL_IMAGE_TAG \
-              --architectures arm64 \
+              --architectures x86_64 \
               --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
               --region ${{ env.AWS_REGION }} \
               --timeout 300 \
@@ -346,7 +346,7 @@ jobs:
               --function-name knowledgebot-document-ingestion \
               --package-type Image \
               --code ImageUri=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$DOCLING_IMAGE_TAG \
-              --architectures arm64 \
+              --architectures x86_64 \
               --role arn:aws:iam::090163643302:role/chatbot-agent-lambda-role \
               --region ${{ env.AWS_REGION }} \
               --timeout 900 \
