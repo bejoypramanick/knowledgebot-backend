@@ -310,22 +310,22 @@ jobs:
           # Set environment variables based on service type
           case "${{ matrix.name }}" in
             "presigned-url")
-              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "pinecone-search"|"pinecone-upsert")
-              ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},PINECONE_HOST=${{ secrets.PINECONE_HOST }},PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},PINECONE_ENVIRONMENT=${{ secrets.PINECONE_ENVIRONMENT }},PINECONE_METRIC=${{ secrets.PINECONE_METRIC }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "neo4j-search"|"neo4j-write")
               ENV_VARS="NEO4J_URI=${{ secrets.NEO4J_URI }},NEO4J_USER=${{ secrets.NEO4J_USER }},NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "embedding-generator")
-              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},EMBEDDING_TYPE=${{ secrets.EMBEDDING_TYPE }},EMBEDDING_MODEL=${{ secrets.EMBEDDING_MODEL }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "rag-search")
-              ENV_VARS="EMBEDDING_SERVICE_URL=${{ secrets.EMBEDDING_SERVICE_URL }},PINECONE_SERVICE_URL=${{ secrets.PINECONE_SERVICE_URL }},NEO4J_SERVICE_URL=${{ secrets.NEO4J_SERVICE_URL }},DYNAMODB_SERVICE_URL=${{ secrets.DYNAMODB_SERVICE_URL }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "chat-generator")
-              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},RAG_SEARCH_SERVICE_URL=${{ secrets.RAG_SEARCH_SERVICE_URL }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             *)
               ENV_VARS="AWS_REGION=${{ env.AWS_REGION }}"
@@ -344,22 +344,22 @@ jobs:
           # Set environment variables based on service type
           case "${{ matrix.name }}" in
             "presigned-url")
-              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "pinecone-search"|"pinecone-upsert")
-              ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},PINECONE_HOST=${{ secrets.PINECONE_HOST }},PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},PINECONE_ENVIRONMENT=${{ secrets.PINECONE_ENVIRONMENT }},PINECONE_METRIC=${{ secrets.PINECONE_METRIC }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "neo4j-search"|"neo4j-write")
               ENV_VARS="NEO4J_URI=${{ secrets.NEO4J_URI }},NEO4J_USER=${{ secrets.NEO4J_USER }},NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "embedding-generator")
-              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},EMBEDDING_TYPE=${{ secrets.EMBEDDING_TYPE }},EMBEDDING_MODEL=${{ secrets.EMBEDDING_MODEL }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "rag-search")
-              ENV_VARS="EMBEDDING_SERVICE_URL=${{ secrets.EMBEDDING_SERVICE_URL }},PINECONE_SERVICE_URL=${{ secrets.PINECONE_SERVICE_URL }},NEO4J_SERVICE_URL=${{ secrets.NEO4J_SERVICE_URL }},DYNAMODB_SERVICE_URL=${{ secrets.DYNAMODB_SERVICE_URL }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             "chat-generator")
-              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},RAG_SEARCH_SERVICE_URL=${{ secrets.RAG_SEARCH_SERVICE_URL }},AWS_REGION=${{ env.AWS_REGION }}"
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},AWS_REGION=${{ env.AWS_REGION }}"
               ;;
             *)
               ENV_VARS="AWS_REGION=${{ env.AWS_REGION }}"
