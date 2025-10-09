@@ -4,8 +4,7 @@
 # ==============================
 
 # Core OpenAI and Agent Framework
-openai>=1.12.0
-openai-agents>=0.1.9
+openai>=1.42.0  # includes openai.agents
 
 # AWS SDK for Lambda environment
 boto3>=1.34.0
