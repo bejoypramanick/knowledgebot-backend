@@ -51,38 +51,7 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
-# Enhanced debugging entrypoint with detailed logging
-RUN echo '#!/bin/bash' > /tmp/debug.sh && \
-    echo 'echo "=== DOCKER IMAGE DEBUG START ==="' >> /tmp/debug.sh && \
-    echo 'echo "Timestamp: $(date)"' >> /tmp/debug.sh && \
-    echo 'echo "Container ID: $(hostname)"' >> /tmp/debug.sh && \
-    echo 'echo "User: $(whoami)"' >> /tmp/debug.sh && \
-    echo 'echo "Working Directory: $(pwd)"' >> /tmp/debug.sh && \
-    echo 'echo "Environment Variables:"' >> /tmp/debug.sh && \
-    echo 'env | sort' >> /tmp/debug.sh && \
-    echo 'echo "=== FILE SYSTEM DEBUG ==="' >> /tmp/debug.sh && \
-    echo 'echo "Root directory contents:"' >> /tmp/debug.sh && \
-    echo 'ls -la /' >> /tmp/debug.sh && \
-    echo 'echo "Lambda task root contents:"' >> /tmp/debug.sh && \
-    echo 'ls -la /var/task/' >> /tmp/debug.sh && \
-    echo 'echo "=== PYTHON DEBUG ==="' >> /tmp/debug.sh && \
-    echo 'echo "Python executable: $(which python)"' >> /tmp/debug.sh && \
-    echo 'echo "Python version:"' >> /tmp/debug.sh && \
-    echo 'python --version' >> /tmp/debug.sh && \
-    echo 'echo "Python path:"' >> /tmp/debug.sh && \
-    echo 'python -c "import sys; print(sys.path)"' >> /tmp/debug.sh && \
-    echo 'echo "=== LAMBDA RUNTIME DEBUG ==="' >> /tmp/debug.sh && \
-    echo 'echo "Lambda runtime environment:"' >> /tmp/debug.sh && \
-    echo 'echo "AWS_LAMBDA_RUNTIME_API: $AWS_LAMBDA_RUNTIME_API"' >> /tmp/debug.sh && \
-    echo 'echo "AWS_LAMBDA_FUNCTION_NAME: $AWS_LAMBDA_FUNCTION_NAME"' >> /tmp/debug.sh && \
-    echo 'echo "AWS_LAMBDA_FUNCTION_VERSION: $AWS_LAMBDA_FUNCTION_VERSION"' >> /tmp/debug.sh && \
-    echo 'echo "=== ENTRYPOINT TEST ==="' >> /tmp/debug.sh && \
-    echo 'echo "Testing if we can execute Python..."' >> /tmp/debug.sh && \
-    echo 'python -c "print(\"Python execution successful\")"' >> /tmp/debug.sh && \
-    echo 'echo "=== DOCKER IMAGE DEBUG END ==="' >> /tmp/debug.sh && \
-    echo 'echo "Container ready for Lambda runtime"' >> /tmp/debug.sh && \
-    chmod +x /tmp/debug.sh
-
-ENTRYPOINT ["/tmp/debug.sh"]
+# Absolute minimal test entrypoint
+ENTRYPOINT ["echo", "CONTAINER STARTED"]
 # Trigger full deployment
 # Trigger fresh build with current code
