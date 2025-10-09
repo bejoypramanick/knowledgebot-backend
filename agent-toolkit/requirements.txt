@@ -25,6 +25,7 @@ docling>=2.25.0
 
 # Machine Learning Stack (Python 3.12 compatible)
 torch>=2.1.0
+torchvision>=0.16.0  # Required for transformers AutoProcessor
 transformers>=4.36.0
 sentence-transformers>=2.2.2
 numpy>=1.26.0,<2.0.0  # NumPy 2.x may have compatibility issues
