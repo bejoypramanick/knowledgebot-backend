@@ -31,6 +31,12 @@ RUN python -m pip install --no-cache-dir \
 # Copy application code
 COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 
+# Ensure proper Python module structure
+RUN ls -la ${LAMBDA_TASK_ROOT}/ && \
+    python -c "import sys; print('Python path:', sys.path)" && \
+    python -c "import os; print('Files in task root:', os.listdir('${LAMBDA_TASK_ROOT}'))" && \
+    python -c "try: import lambda_handlers; print('✅ lambda_handlers imported successfully'); except Exception as e: print('❌ lambda_handlers import failed:', str(e)); import traceback; traceback.print_exc()"
+
 # Set the Lambda handler function
 # AWS Lambda will call the specified handler function when invoked
 CMD ["lambda_handlers.lambda_handler_knowledge_chat"]
