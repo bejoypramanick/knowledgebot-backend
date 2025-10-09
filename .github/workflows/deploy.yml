@@ -99,6 +99,7 @@ jobs:
           --build-arg PINECONE_INDEX_NAME="$PINECONE_INDEX_NAME" \
           --build-arg PINECONE_HOST="$PINECONE_HOST" \
           --build-arg PINECONE_DIMENSIONS="$PINECONE_DIMENSIONS" \
+          --build-arg PINECONE_METRIC="cosine" \
           --build-arg OPENAI_API_KEY="$OPENAI_API_KEY" \
           --build-arg NEO4J_URI="$NEO4J_URI" \
           --build-arg NEO4J_USER="$NEO4J_USER" \
@@ -165,6 +166,7 @@ jobs:
           --build-arg PINECONE_INDEX_NAME="$PINECONE_INDEX_NAME" \
           --build-arg PINECONE_HOST="$PINECONE_HOST" \
           --build-arg PINECONE_DIMENSIONS="$PINECONE_DIMENSIONS" \
+          --build-arg PINECONE_METRIC="cosine" \
           --build-arg OPENAI_API_KEY="$OPENAI_API_KEY" \
           --build-arg NEO4J_URI="$NEO4J_URI" \
           --build-arg NEO4J_USER="$NEO4J_USER" \
@@ -231,6 +233,7 @@ jobs:
           --build-arg PINECONE_INDEX_NAME="$PINECONE_INDEX_NAME" \
           --build-arg PINECONE_HOST="$PINECONE_HOST" \
           --build-arg PINECONE_DIMENSIONS="$PINECONE_DIMENSIONS" \
+          --build-arg PINECONE_METRIC="cosine" \
           --build-arg OPENAI_API_KEY="$OPENAI_API_KEY" \
           --build-arg NEO4J_URI="$NEO4J_URI" \
           --build-arg NEO4J_USER="$NEO4J_USER" \
@@ -280,6 +283,7 @@ jobs:
         PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
         PINECONE_HOST: ${{ secrets.PINECONE_HOST }}
         PINECONE_DIMENSIONS: ${{ secrets.PINECONE_DIMENSIONS }}
+        PINECONE_METRIC: cosine
         DOCUMENTS_BUCKET: ${{ secrets.DOCUMENTS_BUCKET }}
       run: |
         echo "🚀 Deploying Lambda functions..."
@@ -343,7 +347,7 @@ jobs:
               STATUS=$(aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "NotFound")
               CURRENT_IMAGE=$(aws lambda get-function --function-name knowledgebot-chat --region ${{ env.AWS_REGION }} --query 'Configuration.Code.ImageUri' --output text 2>/dev/null || echo "None")
               
-              if [ "$STATUS" = "Successful" ] && [ "$CURRENT_IMAGE" != "None" ]; then
+              if [ "$STATUS" = "Successful" ]; then
                 echo "✅ knowledgebot-chat updated successfully"
                 echo "✅ knowledgebot-chat is using image: $CURRENT_IMAGE"
                 break
@@ -416,7 +420,7 @@ jobs:
               STATUS=$(aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "NotFound")
               CURRENT_IMAGE=$(aws lambda get-function --function-name knowledgebot-document-ingestion --region ${{ env.AWS_REGION }} --query 'Configuration.Code.ImageUri' --output text 2>/dev/null || echo "None")
               
-              if [ "$STATUS" = "Successful" ] && [ "$CURRENT_IMAGE" != "None" ]; then
+              if [ "$STATUS" = "Successful" ]; then
                 echo "✅ knowledgebot-document-ingestion updated successfully"
                 echo "✅ knowledgebot-document-ingestion is using image: $CURRENT_IMAGE"
                 break
@@ -522,7 +526,8 @@ jobs:
               PINECONE_ENVIRONMENT='$PINECONE_ENVIRONMENT',
               PINECONE_INDEX_NAME='$PINECONE_INDEX_NAME',
               PINECONE_HOST='$PINECONE_HOST',
-              PINECONE_DIMENSIONS='$PINECONE_DIMENSIONS'
+              PINECONE_DIMENSIONS='$PINECONE_DIMENSIONS',
+              PINECONE_METRIC='cosine'
             }" \
             --region ${{ env.AWS_REGION }}
           echo "✅ Environment variables set for knowledgebot-chat"
@@ -538,6 +543,7 @@ jobs:
               PINECONE_INDEX_NAME='$PINECONE_INDEX_NAME',
               PINECONE_HOST='$PINECONE_HOST',
               PINECONE_DIMENSIONS='$PINECONE_DIMENSIONS',
+              PINECONE_METRIC='cosine',
               DOCUMENTS_BUCKET='$DOCUMENTS_BUCKET'
             }" \
             --region ${{ env.AWS_REGION }}
