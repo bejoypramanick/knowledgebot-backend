@@ -13,144 +13,153 @@ env:
   ECR_REPOSITORY_PREFIX: knowledgebot-parallel
 
 jobs:
-  # Single build job with parallel child jobs inside
-  build-and-deploy:
+  # Build all layers in parallel first
+  build-layers:
     runs-on: ubuntu-latest
     environment: chatbot
     strategy:
       matrix:
         include:
           # Base Layers (all independent now)
-          - type: layer
-            name: base-layer
+          - name: base-layer
             dockerfile: layers/Dockerfile.base-layer
             size: "~50MB"
-            memory: 256
-            timeout: 30
-          - type: layer
-            name: core-layer
+          - name: core-layer
             dockerfile: layers/Dockerfile.core-layer
             size: "~80MB"
-            memory: 256
-            timeout: 30
-          - type: layer
-            name: database-layer
+          - name: database-layer
             dockerfile: layers/Dockerfile.database-layer
             size: "~150MB"
-            memory: 512
-            timeout: 60
-          - type: layer
-            name: ml-layer
+          - name: ml-layer
             dockerfile: layers/Dockerfile.ml-layer
             size: "~400MB"
-            memory: 1024
-            timeout: 120
           
           # Granular OCR Layers
-          - type: layer
-            name: pdf-processor-layer
+          - name: pdf-processor-layer
             dockerfile: layers/Dockerfile.pdf-processor-layer
             size: "~200MB"
-            memory: 1024
-            timeout: 120
-          - type: layer
-            name: easyocr-layer
+          - name: easyocr-layer
             dockerfile: layers/Dockerfile.easyocr-layer
             size: "~300MB"
-            memory: 1024
-            timeout: 180
-          - type: layer
-            name: table-detector-layer
+          - name: table-detector-layer
             dockerfile: layers/Dockerfile.table-detector-layer
             size: "~400MB"
-            memory: 1024
-            timeout: 240
-          - type: layer
-            name: docling-core-layer
+          - name: docling-core-layer
             dockerfile: layers/Dockerfile.docling-core-layer
             size: "~500MB"
-            memory: 1024
-            timeout: 300
-          - type: layer
-            name: docling-full-layer
+          - name: docling-full-layer
             dockerfile: layers/Dockerfile.docling-full-layer
             size: "~1.2GB"
-            memory: 2048
-            timeout: 900
-          
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build Layer ${{ matrix.name }}
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        echo "🏗️ Building layer: ${{ matrix.name }} (${{ matrix.size }})"
+        
+        # Build layer directly
+        docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+        
+        # Tag as latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+        
+        # Push both tags
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+        
+        echo "✅ Built and pushed layer: ${{ matrix.name }}"
+
+    - name: Output build details
+      run: |
+        echo "📦 Layer: $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG"
+        echo "📏 Size: ${{ matrix.size }}"
+
+  # Build all services in parallel after layers are ready
+  build-services:
+    needs: build-layers
+    runs-on: ubuntu-latest
+    environment: chatbot
+    strategy:
+      matrix:
+        include:
           # Core Micro-Services
-          - type: service
-            name: presigned-url
+          - name: presigned-url
             dockerfile: Dockerfile.presigned-url-layered
             base_layer: base-layer
             size: "~55MB"
             memory: 256
             timeout: 30
-          - type: service
-            name: s3-reader
+          - name: s3-reader
             dockerfile: Dockerfile.s3-reader-layered
             base_layer: core-layer
             size: "~85MB"
             memory: 256
             timeout: 30
-          - type: service
-            name: pinecone-search
+          - name: pinecone-search
             dockerfile: Dockerfile.pinecone-search-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
-          - type: service
-            name: pinecone-upsert
+          - name: pinecone-upsert
             dockerfile: Dockerfile.pinecone-upsert-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
-          - type: service
-            name: neo4j-search
+          - name: neo4j-search
             dockerfile: Dockerfile.neo4j-search-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
-          - type: service
-            name: neo4j-write
+          - name: neo4j-write
             dockerfile: Dockerfile.neo4j-write-layered
             base_layer: database-layer
             size: "~155MB"
             memory: 512
             timeout: 60
-          - type: service
-            name: dynamodb-crud
+          - name: dynamodb-crud
             dockerfile: Dockerfile.dynamodb-crud-layered
             base_layer: core-layer
             size: "~85MB"
             memory: 256
             timeout: 30
-          - type: service
-            name: text-chunker
+          - name: text-chunker
             dockerfile: Dockerfile.text-chunker-layered
             base_layer: base-layer
             size: "~55MB"
             memory: 256
             timeout: 30
-          - type: service
-            name: embedding-generator
+          - name: embedding-generator
             dockerfile: Dockerfile.embedding-generator-layered
             base_layer: ml-layer
             size: "~405MB"
             memory: 1024
             timeout: 120
-          - type: service
-            name: rag-search
+          - name: rag-search
             dockerfile: Dockerfile.rag-search-layered
             base_layer: ml-layer
             size: "~405MB"
             memory: 1024
             timeout: 180
-          - type: service
-            name: chat-generator
+          - name: chat-generator
             dockerfile: Dockerfile.chat-generator-layered
             base_layer: ml-layer
             size: "~405MB"
@@ -158,36 +167,31 @@ jobs:
             timeout: 300
           
           # Granular OCR Micro-Services
-          - type: service
-            name: pdf-processor
+          - name: pdf-processor
             dockerfile: Dockerfile.pdf-processor-layered
             base_layer: pdf-processor-layer
             size: "~255MB"
             memory: 1024
             timeout: 120
-          - type: service
-            name: easyocr
+          - name: easyocr
             dockerfile: Dockerfile.easyocr-layered
             base_layer: easyocr-layer
             size: "~355MB"
             memory: 1024
             timeout: 180
-          - type: service
-            name: table-detector
+          - name: table-detector
             dockerfile: Dockerfile.table-detector-layered
             base_layer: table-detector-layer
             size: "~455MB"
             memory: 1024
             timeout: 240
-          - type: service
-            name: docling-core
+          - name: docling-core
             dockerfile: Dockerfile.docling-core-layered
             base_layer: docling-core-layer
             size: "~555MB"
             memory: 1024
             timeout: 300
-          - type: service
-            name: docling-full
+          - name: docling-full
             dockerfile: Dockerfile.docling-full-layered
             base_layer: docling-full-layer
             size: "~1.25GB"
@@ -209,51 +213,33 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build Layer/Service ${{ matrix.name }}
+    - name: Build Service ${{ matrix.name }}
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        echo "🏗️ Building ${{ matrix.type }}: ${{ matrix.name }} (${{ matrix.size }})"
+        echo "📦 Building service: ${{ matrix.name }} using ${{ matrix.base_layer }}"
         
-        if [ "${{ matrix.type }}" = "layer" ]; then
-          # Build layer directly
-          docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
-          
-          # Tag as latest
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
-          
-          # Push both tags
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
-          
-          echo "✅ Built and pushed layer: ${{ matrix.name }}"
-          
-        else
-          # Build service using base layer
-          echo "📦 Building service: ${{ matrix.name }} using ${{ matrix.base_layer }}"
-          
-          # Import the base layer from ECR
-          docker pull $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:$IMAGE_TAG
-          
-          # Tag it locally for the build
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:$IMAGE_TAG knowledgebot-${{ matrix.base_layer }}:latest
-          
-          # Build the service using the imported layer
-          docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
-          
-          # Tag as latest
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
-          
-          # Push both tags
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
-          
-          echo "✅ Built and pushed service: ${{ matrix.name }}"
-        fi
+        # Import the base layer from ECR
+        docker pull $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:$IMAGE_TAG
+        
+        # Tag it locally for the build
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:$IMAGE_TAG knowledgebot-${{ matrix.base_layer }}:latest
+        
+        # Build the service using the imported layer
+        docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+        
+        # Tag as latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+        
+        # Push both tags
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+        
+        echo "✅ Built and pushed service: ${{ matrix.name }}"
 
-    - name: Deploy Service ${{ matrix.name }} (if service)
-      if: matrix.type == 'service' && github.ref == 'refs/heads/main'
+    - name: Deploy Service ${{ matrix.name }}
+      if: github.ref == 'refs/heads/main'
       env:
         IMAGE_URI: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_PREFIX }}-${{ matrix.name }}:${{ github.sha }}
       run: |
@@ -312,14 +298,14 @@ jobs:
 
     - name: Output build details
       run: |
-        echo "📦 ${{ matrix.type }}: $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG"
+        echo "📦 Service: $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG"
         echo "📏 Size: ${{ matrix.size }}"
         echo "💾 Memory: ${{ matrix.memory }}MB"
         echo "⏱️ Timeout: ${{ matrix.timeout }}s"
 
   # Summary job
   deployment-summary:
-    needs: build-and-deploy
+    needs: [build-layers, build-services]
     runs-on: ubuntu-latest
     environment: chatbot
     if: github.ref == 'refs/heads/main'
