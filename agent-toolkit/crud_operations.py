@@ -71,7 +71,12 @@ try:
 
 except Exception as e:
     logger.error(f"Error initializing services: {e}")
+    logger.error(f"Full traceback: {traceback.format_exc()}")
     raise e  # Fail fast if required services can't be initialized
+
+# Export availability flags for other modules
+NEO4J_AVAILABLE = _neo4j_driver is not None
+PINECONE_AVAILABLE = _pinecone_index is not None
 
 # ============================================================================
 # PURE CRUD TOOLS - NO BUSINESS LOGIC
