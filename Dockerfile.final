@@ -51,7 +51,7 @@ COPY agent-toolkit/ ${LAMBDA_TASK_ROOT}/
 # Make the handler executable
 RUN chmod +x ${LAMBDA_TASK_ROOT}/lambda_handlers.py
 
-# Absolute minimal test entrypoint
-ENTRYPOINT ["echo", "CONTAINER STARTED"]
+# Correct Lambda entrypoint format
+ENTRYPOINT ["python", "-m", "lambda_handlers.lambda_handler"]
 # Trigger full deployment
 # Trigger fresh build with current code
