@@ -32,8 +32,8 @@ logger.info("✅ Imported time module")
 import asyncio
 logger.info("✅ Imported asyncio module")
 
-from datetime import datetime
-logger.info("✅ Imported datetime module")
+import json
+logger.info("✅ Imported json module")
 
 # Import CRUD tools and RAG operations
 from crud_operations import (
@@ -263,132 +263,465 @@ class CRUDAgentInput(BaseModel):
 # ============================================================================
 
 async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[str, Any]:
-    """Run the unified CRUD processing workflow using OpenAI chat completions"""
+    """Run the unified CRUD processing workflow using OpenAI Function Calling"""
     start_time = time.time()
     
     try:
+        # Define all available tools for OpenAI Function Calling
+        tools = [
+            # Query decomposition tools
+            {
+                "type": "function",
+                "function": {
+                    "name": "decompose_query_tool",
+                    "description": "Decompose complex user queries into individual sub-questions",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_query": {
+                                "type": "string",
+                                "description": "The original user query that may contain multiple questions"
+                            }
+                        },
+                        "required": ["user_query"]
+                    }
+                }
+            },
+            
+            # Individual CRUD tools
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_s3_data_tool",
+                    "description": "CRUD: Read data from S3 bucket",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "bucket": {"type": "string", "description": "S3 bucket name"},
+                            "key": {"type": "string", "description": "S3 object key"}
+                        },
+                        "required": ["bucket", "key"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_pinecone_tool",
+                    "description": "CRUD: Search Pinecone vector database",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query_vector": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "description": "Query vector for similarity search"
+                            },
+                            "limit": {"type": "integer", "description": "Maximum number of results", "default": 10}
+                        },
+                        "required": ["query_vector"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_neo4j_tool",
+                    "description": "CRUD: Execute Cypher query in Neo4j",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "cypher_query": {"type": "string", "description": "Cypher query to execute"},
+                            "parameters": {"type": "object", "description": "Query parameters", "default": {}}
+                        },
+                        "required": ["cypher_query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_dynamodb_tool",
+                    "description": "CRUD: Read item from DynamoDB table",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "table_name": {"type": "string", "description": "DynamoDB table name"},
+                            "key": {"type": "object", "description": "Primary key for the item"}
+                        },
+                        "required": ["table_name", "key"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "batch_read_dynamodb_tool",
+                    "description": "CRUD: Batch read items from DynamoDB table",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "table_name": {"type": "string", "description": "DynamoDB table name"},
+                            "keys": {"type": "array", "description": "List of primary keys"}
+                        },
+                        "required": ["table_name", "keys"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_dynamodb_tool",
+                    "description": "CRUD: Write item to DynamoDB table",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "table_name": {"type": "string", "description": "DynamoDB table name"},
+                            "item": {"type": "object", "description": "Item to write"}
+                        },
+                        "required": ["table_name", "item"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "update_dynamodb_tool",
+                    "description": "CRUD: Update item in DynamoDB table",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "table_name": {"type": "string", "description": "DynamoDB table name"},
+                            "key": {"type": "object", "description": "Primary key for the item"},
+                            "update_expression": {"type": "string", "description": "Update expression"},
+                            "expression_values": {"type": "object", "description": "Expression attribute values"}
+                        },
+                        "required": ["table_name", "key", "update_expression", "expression_values"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "delete_dynamodb_tool",
+                    "description": "CRUD: Delete item from DynamoDB table",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "table_name": {"type": "string", "description": "DynamoDB table name"},
+                            "key": {"type": "object", "description": "Primary key for the item"}
+                        },
+                        "required": ["table_name", "key"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_embedding_tool",
+                    "description": "CRUD: Generate embedding vector for text",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string", "description": "Text to generate embedding for"}
+                        },
+                        "required": ["text"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "upsert_pinecone_tool",
+                    "description": "CRUD: Upsert vectors to Pinecone",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "vectors": {"type": "array", "description": "List of vectors to upsert"},
+                            "namespace": {"type": "string", "description": "Pinecone namespace", "default": None}
+                        },
+                        "required": ["vectors"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "delete_pinecone_tool",
+                    "description": "CRUD: Delete vectors from Pinecone",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "ids": {"type": "array", "items": {"type": "string"}, "description": "Vector IDs to delete"},
+                            "namespace": {"type": "string", "description": "Pinecone namespace", "default": None}
+                        },
+                        "required": ["ids"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "execute_neo4j_write_tool",
+                    "description": "CRUD: Execute write Cypher query in Neo4j",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "cypher_query": {"type": "string", "description": "Cypher query to execute"},
+                            "parameters": {"type": "object", "description": "Query parameters", "default": {}}
+                        },
+                        "required": ["cypher_query"]
+                    }
+                }
+            },
+            
+            # Unified RAG tools
+            {
+                "type": "function",
+                "function": {
+                    "name": "rag_search_tool",
+                    "description": "RAG: Complete search pipeline with Pinecone + Neo4j + DynamoDB",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query"},
+                            "limit": {"type": "integer", "description": "Maximum number of results", "default": 5},
+                            "filter_dict": {"type": "object", "description": "Filter criteria", "default": None},
+                            "namespace": {"type": "string", "description": "Pinecone namespace", "default": None}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "rag_upsert_document_tool",
+                    "description": "RAG: Complete document ingestion pipeline",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "document_content": {"type": "string", "description": "Document content to process"},
+                            "document_id": {"type": "string", "description": "Unique document identifier"},
+                            "filename": {"type": "string", "description": "Original filename"},
+                            "namespace": {"type": "string", "description": "Pinecone namespace", "default": None}
+                        },
+                        "required": ["document_content", "document_id", "filename"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "rag_chunk_document_tool",
+                    "description": "RAG: Intelligent text chunking",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string", "description": "Text to chunk"},
+                            "chunk_size": {"type": "integer", "description": "Maximum chunk size", "default": 1000},
+                            "chunk_overlap": {"type": "integer", "description": "Overlap between chunks", "default": 200}
+                        },
+                        "required": ["text"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "rag_process_document_with_docling_tool",
+                    "description": "RAG: Advanced document processing with hierarchical semantic chunking",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {"type": "string", "description": "Path to document file"},
+                            "document_id": {"type": "string", "description": "Unique document identifier"},
+                            "namespace": {"type": "string", "description": "Pinecone namespace", "default": None}
+                        },
+                        "required": ["file_path", "document_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "rag_process_document_from_bytes_tool",
+                    "description": "RAG: Process document from bytes using Docling (useful for S3 documents)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "document_bytes": {"type": "string", "description": "Document bytes (base64 encoded)"},
+                            "filename": {"type": "string", "description": "Original filename"},
+                            "document_id": {"type": "string", "description": "Unique document identifier"},
+                            "namespace": {"type": "string", "description": "Pinecone namespace", "default": None}
+                        },
+                        "required": ["document_bytes", "filename", "document_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "rag_search_with_hierarchical_context_tool",
+                    "description": "RAG: Enhanced RAG search with hierarchical context from Docling chunks",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query"},
+                            "limit": {"type": "integer", "description": "Maximum number of results", "default": 5},
+                            "filter_dict": {"type": "object", "description": "Filter criteria", "default": None},
+                            "namespace": {"type": "string", "description": "Pinecone namespace", "default": None}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }
+        ]
+
         # Create system message with instructions
         system_message = """You are a RAG Agent that handles intelligent document retrieval and generation using production RAG tools.
 
 ## Core Mission:
 You provide intelligent responses by searching through documents using vector similarity, knowledge graphs, and metadata.
 
-## Available RAG Tools:
-- **RAG Search**: rag_search_tool - Complete search pipeline with Pinecone + Neo4j + DynamoDB
-- **RAG Document Processing**: rag_upsert_document_tool - Complete document ingestion pipeline
-- **RAG Text Chunking**: rag_chunk_document_tool - Intelligent text chunking
-- **Docling Document Processing**: rag_process_document_with_docling_tool - Advanced document processing with hierarchical semantic chunking
-- **Docling Bytes Processing**: rag_process_document_from_bytes_tool - Process documents from bytes (S3 compatible)
-- **Hierarchical RAG Search**: rag_search_with_hierarchical_context_tool - Enhanced search with document structure context
-- **Individual CRUD Tools**: All individual database operations for fine-grained control
+## Available Tools:
+You have access to comprehensive RAG tools including:
+- **Query Decomposition**: decompose_query_tool - Break complex queries into sub-questions
+- **Individual CRUD Tools**: All database operations (S3, DynamoDB, Pinecone, Neo4j)
+- **Unified RAG Tools**: Complete pipelines for search and document processing
+- **Docling Tools**: Advanced document processing with hierarchical chunking
 
-## Your Responsibilities:
-1. **Query Decomposition**: Use decompose_query_tool to break complex queries into sub-questions
-2. **Query Understanding**: Analyze user queries to determine search strategy
-3. **RAG Search**: Use rag_search_tool for comprehensive document retrieval
-4. **Context Processing**: Analyze retrieved documents and relationships
-5. **Response Generation**: Create intelligent responses based on retrieved context
-6. **Document Processing**: Use rag_upsert_document_tool for new document ingestion
+## Your Workflow:
+1. **Analyze the Query**: Understand what the user is asking for
+2. **Decompose if Needed**: Use decompose_query_tool for complex multi-part queries
+3. **Execute RAG Search**: Use rag_search_tool for comprehensive document retrieval
+4. **Process Results**: Analyze retrieved information and relationships
+5. **Generate Response**: Create intelligent, helpful responses with source attribution
 
 ## Key Principles:
-- **CRUD Tools Only**: Use tools only for Create, Read, Update, Delete operations
-- **AI Business Logic**: All decision-making, processing, and formatting handled by you
-- **Natural Intelligence**: Use your language understanding for everything
-- **Context Awareness**: Understand and respond to user needs intelligently
-
-## Workflow for Knowledge Retrieval:
-1. **Decompose Query**: Use decompose_query_tool to break complex queries into sub-questions
-2. **Understand Query**: Use your AI to analyze what the user wants
-3. **Generate Embedding**: Use generate_embedding_tool to create query vector
-4. **Search Pinecone**: Use search_pinecone_tool to find similar vectors
-5. **Search Neo4j**: Use search_neo4j_tool with intelligent Cypher queries
-6. **Get Details**: Use batch_read_dynamodb_tool to get chunk details
-7. **Process Results**: Use your AI to analyze and synthesize information
-8. **Generate Response**: Use your AI to create natural, helpful responses
+- **Use Tools Actively**: Call the appropriate tools to gather information
+- **Provide Sources**: Always cite where information came from
+- **Handle Multi-Part Queries**: Break down complex questions systematically
+- **Be Comprehensive**: Use multiple tools when needed for complete answers
 
 ## Multi-Part Query Handling:
-When you receive a complex query that contains multiple questions:
-1. **First**: Use decompose_query_tool to break it into individual sub-questions
-2. **Then**: For each sub-question, use rag_search_tool to find relevant information
-3. **Finally**: Structure your response to address each sub-question clearly:
-   - Use numbered sections or bullet points
-   - Provide specific answers for each question
-   - Maintain logical flow and connections between answers
-   - If questions are related, explain the connections
+When you receive a complex query with multiple questions:
+1. Use decompose_query_tool to break it into sub-questions
+2. For each sub-question, use rag_search_tool to find relevant information
+3. Structure your response to address each question clearly
+4. Provide a summary connecting all answers
 
-## Response Structure for Multi-Part Queries:
-```
-**Answer 1: [First Question]**
-[Detailed answer with sources]
+Always use the available tools to provide accurate, well-sourced responses."""
 
-**Answer 2: [Second Question]**
-[Detailed answer with sources]
+        # Initialize conversation
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": workflow_input.user_query}
+        ]
 
-**Answer 3: [Third Question]**
-[Detailed answer with sources]
+        # Add conversation history if provided
+        if workflow_input.conversation_history:
+            messages.extend(workflow_input.conversation_history)
 
-**Summary**: [Brief overview connecting all answers]
-```
+        # Add user preferences context if provided
+        if workflow_input.user_preferences:
+            messages.append({
+                "role": "user",
+                "content": f"User preferences: {workflow_input.user_preferences}"
+            })
 
-## Workflow for Document Processing:
-1. **Read Document**: Use read_s3_data_tool to get document content
-2. **Process Content**: Use your AI to understand and structure the document
-3. **Generate Embeddings**: Use generate_embedding_tool for content chunks
-4. **Store Vectors**: Use upsert_pinecone_tool to store embeddings
-5. **Store Metadata**: Use write_dynamodb_tool to store chunk metadata
-6. **Create Relationships**: Use execute_neo4j_write_tool to create knowledge graph
-
-## Docling-Powered Document Processing:
-For advanced document processing with hierarchical semantic chunking:
-1. **Process with Docling**: Use rag_process_document_with_docling_tool for file-based documents
-2. **Process from Bytes**: Use rag_process_document_from_bytes_tool for S3/streaming documents
-3. **Hierarchical Search**: Use rag_search_with_hierarchical_context_tool for structure-aware search
-4. **Document Types**: Docling supports PDF, Word, PowerPoint, HTML, and more
-5. **Chunk Types**: Creates title, heading, paragraph, list, table, figure chunks with hierarchy levels
-6. **Section Structure**: Maintains document structure with section paths and hierarchy levels
-7. **Docling Fallback**: If hierarchical chunking fails, falls back to Docling's default chunking strategy
-
-## Docling Chunk Types and Hierarchy:
-- **Title** (Level 0): Document title
-- **Heading H1** (Level 1): Main sections
-- **Heading H2** (Level 2): Subsections
-- **Heading H3+** (Level 3+): Sub-subsections
-- **Paragraph** (Level 2): Regular text content
-- **List Item** (Level 2): Bullet points and numbered lists
-- **Table** (Level 3): Tabular data
-- **Figure** (Level 3): Images, charts, diagrams
-- **Default Paragraph** (Level 3): Docling's default chunking fallback
-
-## Response Guidelines:
-- Always provide comprehensive, helpful responses
-- Use natural language that feels conversational
-- Handle multiple questions intelligently
-- Provide clear source attribution when using retrieved data
-- Adapt your response style to match the user's query complexity
-- Handle edge cases gracefully with natural explanations
-
-## Error Handling:
-- If CRUD operations fail, use your AI to provide helpful error messages
-- Suggest alternative approaches when possible
-- Maintain a helpful, professional tone even when errors occur
-
-## Key Principle:
-**You are the intelligence** - use your AI capabilities for all business logic, decision-making, processing, and formatting. Tools are only for data operations.
-
-When you receive any query, immediately begin your intelligent analysis and use the appropriate CRUD tools to gather data, then use your AI to process and respond naturally."""
-
-        # Use OpenAI chat completions API
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": workflow_input.user_query},
-            ],
-            temperature=0.1,
-            max_tokens=4096
-        )
+        # Execute conversation with function calling
+        max_iterations = 10  # Prevent infinite loops
+        iteration = 0
         
-        final_response = response.choices[0].message.content
+        while iteration < max_iterations:
+            iteration += 1
+            
+            # Call OpenAI with function calling enabled
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.1,
+                max_tokens=4096
+            )
+            
+            message = response.choices[0].message
+            messages.append(message)
+            
+            # Check if the model wants to call a function
+            if message.tool_calls:
+                # Execute each tool call
+                for tool_call in message.tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)  # Parse JSON arguments
+                    
+                    logger.info(f"Executing tool: {function_name} with args: {function_args}")
+                    
+                    try:
+                        # Execute the function
+                        if function_name == "decompose_query_tool":
+                            result = decompose_query_tool(**function_args)
+                        elif function_name == "read_s3_data_tool":
+                            result = read_s3_data_tool(**function_args)
+                        elif function_name == "search_pinecone_tool":
+                            result = search_pinecone_tool(**function_args)
+                        elif function_name == "search_neo4j_tool":
+                            result = search_neo4j_tool(**function_args)
+                        elif function_name == "read_dynamodb_tool":
+                            result = read_dynamodb_tool(**function_args)
+                        elif function_name == "batch_read_dynamodb_tool":
+                            result = batch_read_dynamodb_tool(**function_args)
+                        elif function_name == "write_dynamodb_tool":
+                            result = write_dynamodb_tool(**function_args)
+                        elif function_name == "update_dynamodb_tool":
+                            result = update_dynamodb_tool(**function_args)
+                        elif function_name == "delete_dynamodb_tool":
+                            result = delete_dynamodb_tool(**function_args)
+                        elif function_name == "generate_embedding_tool":
+                            result = generate_embedding_tool(**function_args)
+                        elif function_name == "upsert_pinecone_tool":
+                            result = upsert_pinecone_tool(**function_args)
+                        elif function_name == "delete_pinecone_tool":
+                            result = delete_pinecone_tool(**function_args)
+                        elif function_name == "execute_neo4j_write_tool":
+                            result = execute_neo4j_write_tool(**function_args)
+                        elif function_name == "rag_search_tool":
+                            result = rag_search_tool(**function_args)
+                        elif function_name == "rag_upsert_document_tool":
+                            result = rag_upsert_document_tool(**function_args)
+                        elif function_name == "rag_chunk_document_tool":
+                            result = rag_chunk_document_tool(**function_args)
+                        elif function_name == "rag_process_document_with_docling_tool":
+                            result = rag_process_document_with_docling_tool(**function_args)
+                        elif function_name == "rag_process_document_from_bytes_tool":
+                            result = rag_process_document_from_bytes_tool(**function_args)
+                        elif function_name == "rag_search_with_hierarchical_context_tool":
+                            result = rag_search_with_hierarchical_context_tool(**function_args)
+                        else:
+                            result = {"error": f"Unknown function: {function_name}"}
+                        
+                        # Add function result to conversation
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": str(result)
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"Error executing {function_name}: {str(e)}")
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": f"Error: {str(e)}"
+                        })
+            else:
+                # No more tool calls, we have the final response
+                break
+        
+        # Extract final response
+        final_response = messages[-1]["content"] if messages[-1]["role"] == "assistant" else "No response generated"
         processing_time = time.time() - start_time
         
         return {
@@ -398,7 +731,8 @@ When you receive any query, immediately begin your intelligent analysis and use 
             "processing_time": processing_time,
             "timestamp": datetime.now().isoformat(),
             "model": "gpt-4o-mini",
-            "status": "success"
+            "status": "success",
+            "iterations": iteration
         }
         
     except Exception as e:
