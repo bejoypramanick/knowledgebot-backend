@@ -4,14 +4,14 @@
 
 # Core OpenAI and Agent Framework
 openai>=1.107.1,<2.0.0
-openai-agents>=0.3.0,<0.4.0
+openai-agents>=1.2.0
 
 # HTTP client for microservice communication
 httpx>=0.25.0
 requests>=2.31.0
 
 # Data processing and validation
-pydantic>=2.12.0
+pydantic>=2.5.0
 typing-extensions>=4.9.0
 orjson>=3.9.0
 
