@@ -265,78 +265,8 @@ async def knowledge_chat_handler_async(event: Dict[str, Any], context: Any) -> D
             "body": json.dumps(error_response)
         }
 
-async def knowledge_document_ingestion_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """Knowledge document ingestion handler - all business logic handled by AgentBuilder model"""
-    try:
-        # Extract S3 event information
-        records = event.get('Records', [])
-        if not records:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    "error": "No S3 records found in event"
-                })
-            }
-        
-        record = records[0]
-        s3_info = record.get('s3', {})
-        bucket = s3_info.get('bucket', {}).get('name', '')
-        key = s3_info.get('object', {}).get('key', '')
-        
-        # Create knowledge agent input for document processing with Docling
-        knowledge_input = CRUDAgentInput(
-            user_query=f"Process document with Docling hierarchical chunking: s3://{bucket}/{key}",
-            conversation_history=[],
-            conversation_id=f"doc_processing_{hash(key)}",
-            user_preferences={
-                "processing_type": "document_ingestion",
-                "use_docling": True,
-                "hierarchical_chunking": True,
-                "document_source": f"s3://{bucket}/{key}"
-            }
-        )
-        
-        # Run the knowledge processing
-        result = await run_unified_crud_processing(knowledge_input)
-        
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "document_id": f"doc_{hash(key)}",
-                "status": "completed",
-                "s3_bucket": bucket,
-                "s3_key": key,
-                "processing_time": result.get("processing_time", 0),
-                "workflow_type": "docling_document_processing",
-                "agent_used": "knowledge_agent",
-                "tools_used": "docling_hierarchical_chunking",
-                "business_logic": "ai_handled",
-                "docling_enabled": True,
-                "hierarchical_chunking": True,
-                "chunk_types": result.get("chunk_types", []),
-                "total_chunks": result.get("total_chunks", 0)
-            })
-        }
-        
-    except Exception as e:
-        logger.error("=== ERROR IN DOCUMENT INGESTION HANDLER ===")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.error(f"Error message: {str(e)}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        error_response = {
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "traceback": traceback.format_exc(),
-            "status": "failed",
-            "workflow_type": "unified_crud_processing"
-        }
-        logger.error(f"Error response: {json.dumps(error_response, default=str)}")
-        
-        return {
-            "statusCode": 500,
-            "body": json.dumps(error_response)
-        }
+# Document ingestion is now handled by docling-unified-handler.py
+# This function is removed as S3 events should directly trigger the docling service
 
 # Synchronous wrappers for Lambda
 def lambda_handler_knowledge_chat(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -369,20 +299,8 @@ def lambda_handler_presigned_url(event: Dict[str, Any], context: Any) -> Dict[st
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
-def lambda_handler_knowledge_document_ingestion(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """Synchronous wrapper for knowledge document ingestion handler"""
-    logger.info("=== LAMBDA HANDLER DOCUMENT INGESTION STARTED ===")
-    logger.info(f"Event: {json.dumps(event, default=str)}")
-    logger.info(f"Context: {context}")
-    
-    try:
-        result = asyncio.run(knowledge_document_ingestion_handler_async(event, context))
-        logger.info(f"Document ingestion handler result: {json.dumps(result, default=str)}")
-        return result
-    except Exception as e:
-        logger.error(f"Error in lambda_handler_knowledge_document_ingestion: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise
+# Document ingestion is now handled by docling-unified-handler.py
+# This function is removed as S3 events should directly trigger the docling service
 
 # Main Lambda handler (can be used for both chat and document processing)
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -419,11 +337,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 pass
         
         # Check if this is an S3 event (document processing)
+        # S3 events should now directly trigger docling-unified-handler
+        # This handler only processes chat requests
         if 'Records' in event and event['Records']:
             record = event['Records'][0]
             if record.get('eventSource') == 'aws:s3':
-                logger.info("Processing S3 event for document ingestion")
-                return lambda_handler_knowledge_document_ingestion(event, context)
+                logger.info("S3 event detected - should be handled by docling-unified-handler")
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps({
+                        "error": "S3 events should be handled by docling-unified-handler, not this agent handler"
+                    })
+                }
         
         # Otherwise, treat as chat request
         logger.info("Processing chat request")
@@ -473,17 +398,5 @@ def chat_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
-def document_ingestion_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """Dedicated document ingestion Lambda handler"""
-    logger.info("=== DOCUMENT INGESTION LAMBDA HANDLER STARTED ===")
-    logger.info(f"Event: {json.dumps(event, default=str)}")
-    logger.info(f"Context: {context}")
-    
-    try:
-        result = lambda_handler_knowledge_document_ingestion(event, context)
-        logger.info(f"Document ingestion lambda handler result: {json.dumps(result, default=str)}")
-        return result
-    except Exception as e:
-        logger.error(f"Error in document_ingestion_lambda_handler: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise
+# Document ingestion is now handled by docling-unified-handler.py
+# This function is removed as S3 events should directly trigger the docling service
