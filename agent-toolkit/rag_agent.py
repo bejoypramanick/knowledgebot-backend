@@ -18,7 +18,11 @@ logger.info("✅ Configured logging in rag_agent")
 
 # Import OpenAI client
 import openai
+from openai import OpenAI
 logger.info("✅ OpenAI client imported successfully")
+
+# Initialize OpenAI client
+openai_client = OpenAI()
 
 # Create a simple Agent-like class for compatibility
 class Agent:
@@ -31,8 +35,8 @@ class Agent:
 class Runner:
     @staticmethod
     async def run(agent, input_text):
-        # Use OpenAI chat completions
-        response = openai.chat.completions.create(
+        # Use OpenAI chat completions with proper client
+        response = openai_client.chat.completions.create(
             model=agent.model,
             messages=[
                 {"role": "system", "content": agent.instructions},
