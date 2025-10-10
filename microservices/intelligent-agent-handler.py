@@ -40,10 +40,10 @@ class SearchFilters(TypedDict):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Import OpenAI client
-import openai
+# Import OpenAI client and Pydantic
 from openai import OpenAI
-logger.info("✅ OpenAI client imported successfully")
+from pydantic import BaseModel
+logger.info("✅ OpenAI client and Pydantic imported successfully")
 
 # Initialize OpenAI client
 openai_client = OpenAI()
@@ -59,13 +59,35 @@ class Agent:
 class Runner:
     @staticmethod
     async def run(agent, input_text):
-        # Use OpenAI chat completions with proper client
+        # Convert our function tools to OpenAI format
+        openai_tools = []
+        for tool in agent.tools:
+            if hasattr(tool, '__name__'):
+                # This is a function tool
+                openai_tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": tool.__name__,
+                        "description": tool.__doc__ or f"Tool: {tool.__name__}",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "input": {"type": "string", "description": "Input for the tool"}
+                            },
+                            "required": ["input"]
+                        }
+                    }
+                })
+        
+        # Use OpenAI chat completions with function calling
         response = openai_client.chat.completions.create(
             model=agent.model,
             messages=[
                 {"role": "system", "content": agent.instructions},
                 {"role": "user", "content": input_text}
             ],
+            tools=openai_tools if openai_tools else None,
+            tool_choice="auto" if openai_tools else None,
             max_tokens=1000,
             temperature=0.7
         )
@@ -74,7 +96,13 @@ class Runner:
             def __init__(self, content):
                 self.final_output = content
         
-        return Result(response.choices[0].message.content)
+        # Extract the response content
+        message = response.choices[0].message
+        if message.content:
+            return Result(message.content)
+        else:
+            # Handle function calls if any
+            return Result("Function call detected but not implemented in this simplified version")
 
 def function_tool(func):
     return func
