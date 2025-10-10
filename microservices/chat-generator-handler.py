@@ -108,6 +108,21 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info("=== CHAT RESPONSE GENERATOR STARTED ===")
     
     try:
+        # Handle CORS preflight request
+        if event.get('httpMethod') == 'OPTIONS':
+            logger.info("Handling CORS preflight request")
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "86400"
+                },
+                "body": ""
+            }
+        
         # Parse request body
         if isinstance(event.get('body'), str):
             body = json.loads(event['body'])
@@ -121,8 +136,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if not query:
             return {
                 "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Query is required"})
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Credentials": "true"
+                },
+                "body": json.dumps({"error": "Query is required", "success": False})
             }
         
         # Generate response
@@ -131,7 +152,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         return {
             "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
             "body": json.dumps(result)
         }
         
@@ -139,6 +166,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error(f"Error in chat response generator: {e}")
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": str(e)})
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
+            "body": json.dumps({"error": str(e), "success": False})
         }

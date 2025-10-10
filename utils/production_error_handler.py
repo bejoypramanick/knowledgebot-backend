@@ -158,8 +158,9 @@ def production_error_handler(func: Callable) -> Callable:
                     "headers": {
                         "Content-Type": "application/json",
                         "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-                        "Access-Control-Allow-Methods": "POST, OPTIONS"
+                        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Credentials": "true"
                     },
                     "body": json.dumps(error_response)
                 }
