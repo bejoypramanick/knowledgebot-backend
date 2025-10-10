@@ -192,6 +192,12 @@ jobs:
         echo "  Has changes: $HAS_CHANGES"
         echo "  Changed layers: $CHANGED_LAYERS"
         echo "  Changed services: $CHANGED_SERVICES"
+        
+        # Debug: Show what will be output
+        echo "🔍 Debug - GitHub Outputs:"
+        echo "  has-changes=$HAS_CHANGES"
+        echo "  changed-layers=$CHANGED_LAYERS"
+        echo "  changed-services=$CHANGED_SERVICES"
 
   # Build changed layers in parallel
   build-layers:
@@ -207,7 +213,11 @@ jobs:
     - name: Build changed layers
       env:
         CHANGED_LAYERS: ${{ needs.detect-changes.outputs.changed-layers }}
+        HAS_CHANGES: ${{ needs.detect-changes.outputs.has-changes }}
       run: |
+        echo "🔍 Debug - Received from detect-changes:"
+        echo "  has-changes: $HAS_CHANGES"
+        echo "  changed-layers: $CHANGED_LAYERS"
         echo "🔍 Building only changed layers: $CHANGED_LAYERS"
         
         # Define layer configurations
