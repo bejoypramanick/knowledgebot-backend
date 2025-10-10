@@ -26,7 +26,7 @@ The unified handler now performs:
 - **Graph Relations**: Document relationships to Neo4j
 
 ### 4. ✅ Implemented Intelligent Agent Query Flow
-- **New Handler**: `microservices/agent-query-handler.py`
+- **Main Handler**: `microservices/intelligent-agent-handler.py`
 - **Features**:
   - Query complexity analysis
   - Task decomposition for complex queries
@@ -85,7 +85,7 @@ The unified handler now performs:
 
 ### New Files Created
 - `microservices/docling-unified-handler.py` - Unified document processing
-- `microservices/agent-query-handler.py` - Intelligent query handling
+- `microservices/intelligent-agent-handler.py` - Intelligent query handling
 - `Dockerfile.docling-unified` - Single docling Docker image
 - `requirements-docling-unified.txt` - Unified dependencies
 - `README.md` - Comprehensive documentation
@@ -136,7 +136,7 @@ S3_READER_FUNCTION=s3-reader-handler
 2. Set up AWS credentials in GitHub Secrets
 3. Update Lambda function configurations
 4. Set up S3 event triggers for docling-unified-handler
-5. Configure API Gateway for agent-query-handler
+5. Configure API Gateway for intelligent-agent-handler
 
 ### Monitoring
 1. Set up CloudWatch dashboards

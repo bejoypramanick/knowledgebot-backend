@@ -36,7 +36,7 @@ This repository contains the backend services for KnowledgeBot, a comprehensive 
 
 ### 2. Query Processing Pipeline (API Triggered)
 
-**Agent Query Handler** (`agent-query-handler.py`)
+**Intelligent Agent Handler** (`intelligent-agent-handler.py`)
 - **Trigger**: HTTP API requests
 - **Process**:
   - Analyzes query complexity
@@ -77,7 +77,7 @@ This repository contains the backend services for KnowledgeBot, a comprehensive 
 
 ### Query Processing Flow
 ```
-1. Client sends query to agent-query-handler
+1. Client sends query to intelligent-agent-handler
 2. Handler analyzes query complexity
 3. Decomposes complex queries if needed
 4. Executes searches:

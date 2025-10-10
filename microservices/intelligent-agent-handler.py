@@ -10,9 +10,13 @@ import os
 import logging
 import asyncio
 import httpx
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 import traceback
+
+# Type definitions for better Pydantic compatibility
+JsonValue = Union[str, int, float, bool, None, List['JsonValue'], Dict[str, 'JsonValue']]
+JsonDict = Dict[str, JsonValue]
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -32,7 +36,7 @@ http_client = httpx.AsyncClient(timeout=300.0)
 # Microservice URLs (will be set via environment variables)
 MICROSERVICE_BASE_URL = os.environ.get('MICROSERVICE_BASE_URL', 'https://api.knowledgebot.com')
 
-async def call_microservice(service_name: str, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+async def call_microservice(service_name: str, endpoint: str, payload: JsonDict) -> JsonDict:
     """Call a microservice endpoint"""
     try:
         url = f"{MICROSERVICE_BASE_URL}/{service_name}/{endpoint}"
@@ -89,17 +93,17 @@ async def generate_embeddings_tool(texts: List[str]) -> str:
     return json.dumps(result)
 
 @function_tool
-async def search_pinecone_tool(query_vector: List[float], limit: int = 10, filters: Dict[str, Any] = None) -> str:
+async def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> str:
     """Search Pinecone vector database"""
     result = await call_microservice("pinecone-search", "search", {
         "query_vector": query_vector,
         "limit": limit,
-        "filters": filters or {}
+        "filters": {}
     })
     return json.dumps(result)
 
 @function_tool
-async def upsert_pinecone_tool(vectors: List[Dict[str, Any]]) -> str:
+async def upsert_pinecone_tool(vectors: List[Dict[str, str]]) -> str:
     """Store vectors in Pinecone"""
     result = await call_microservice("pinecone-upsert", "upsert", {
         "vectors": vectors
@@ -123,7 +127,7 @@ async def write_neo4j_tool(cypher_query: str) -> str:
     return json.dumps(result)
 
 @function_tool
-async def read_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> str:
+async def read_dynamodb_tool(table_name: str, key: JsonDict) -> str:
     """Read from DynamoDB"""
     result = await call_microservice("dynamodb-crud", "read", {
         "table_name": table_name,
@@ -132,7 +136,7 @@ async def read_dynamodb_tool(table_name: str, key: Dict[str, Any]) -> str:
     return json.dumps(result)
 
 @function_tool
-async def write_dynamodb_tool(table_name: str, item: Dict[str, Any]) -> str:
+async def write_dynamodb_tool(table_name: str, item: JsonDict) -> str:
     """Write to DynamoDB"""
     result = await call_microservice("dynamodb-crud", "write", {
         "table_name": table_name,
@@ -141,7 +145,7 @@ async def write_dynamodb_tool(table_name: str, item: Dict[str, Any]) -> str:
     return json.dumps(result)
 
 @function_tool
-async def rag_search_tool(query: str, limit: int = 5, filters: Dict[str, Any] = None) -> str:
+async def rag_search_tool(query: str, limit: int = 5, filters: Optional[JsonDict] = None) -> str:
     """Perform comprehensive RAG search across all databases"""
     result = await call_microservice("rag-search", "search", {
         "query": query,
@@ -839,7 +843,7 @@ logger.info("✅ Intelligent Agent created with comprehensive tools and instruct
 # LAMBDA HANDLER
 # ============================================================================
 
-async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+async def intelligent_agent_handler_async(event: JsonDict, context: Any) -> JsonDict:
     """Main intelligent agent handler"""
     try:
         logger.info("🤖 Intelligent Agent processing request")
@@ -927,6 +931,6 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
             })
         }
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def lambda_handler(event: JsonDict, context: Any) -> JsonDict:
     """Lambda handler entry point"""
     return asyncio.run(intelligent_agent_handler_async(event, context))
