@@ -1,0 +1,528 @@
+name: Build and Deploy Unified Microservices
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      force_rebuild_all:
+        description: 'Force rebuild all services (ignore change detection)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+  ECR_REPOSITORY_PREFIX: knowledgebot
+
+jobs:
+  # Cleanup before build
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Clean up old ECR images
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        echo "🧹 Cleaning up old ECR images..."
+        
+        # List of repositories to cleanup
+        REPOSITORIES=(
+          "knowledgebot-docling-unified"
+          "knowledgebot-agent-query"
+          "knowledgebot-presigned-url"
+          "knowledgebot-pinecone-search"
+          "knowledgebot-pinecone-upsert"
+          "knowledgebot-neo4j-search"
+          "knowledgebot-neo4j-write"
+          "knowledgebot-dynamodb-crud"
+          "knowledgebot-s3-reader"
+          "knowledgebot-chat-generator"
+          "knowledgebot-embedding-generator"
+          "knowledgebot-text-chunker"
+          "knowledgebot-pdf-processor"
+          "knowledgebot-table-detector"
+          "knowledgebot-easyocr"
+        )
+        
+        for repo in "${REPOSITORIES[@]}"; do
+          echo "Processing repository: $repo"
+          
+          # Check if repository exists
+          if aws ecr describe-repositories --repository-names "$repo" --region "$AWS_REGION" >/dev/null 2>&1; then
+            # Get all images and keep only last 5
+            aws ecr describe-images \
+              --repository-name "$repo" \
+              --region "$AWS_REGION" \
+              --query 'imageDetails[*].[imageDigest,imagePushedAt]' \
+              --output text | sort -k2 -r | tail -n +6 | while read digest pushed_at; do
+                if [ -n "$digest" ]; then
+                  echo "Deleting old image: $digest (pushed: $pushed_at)"
+                  aws ecr batch-delete-image \
+                    --repository-name "$repo" \
+                    --region "$AWS_REGION" \
+                    --image-ids imageDigest="$digest" || echo "Failed to delete image $digest"
+                fi
+              done
+            
+            # Apply lifecycle policy
+            if [ -f "ecr-lifecycle-policy.json" ]; then
+              aws ecr put-lifecycle-policy \
+                --repository-name "$repo" \
+                --region "$AWS_REGION" \
+                --lifecycle-policy-text file://ecr-lifecycle-policy.json || echo "Failed to apply lifecycle policy to $repo"
+            fi
+          fi
+        done
+        
+        echo "✅ ECR cleanup completed"
+
+  # Build all microservices in parallel
+  build-services:
+    needs: cleanup
+    runs-on: ubuntu-latest
+    environment: chatbot
+    strategy:
+      max-parallel: 3
+      matrix:
+        include:
+          # Core unified services
+          - name: docling-unified
+            dockerfile: Dockerfile.docling-unified
+            requirements: requirements-docling-unified.txt
+            size: "~2.5GB"
+            memory: 3008
+            timeout: 900
+          - name: agent-query
+            dockerfile: Dockerfile.intelligent-agent
+            requirements: requirements-intelligent-agent.txt
+            size: "~200MB"
+            memory: 1024
+            timeout: 300
+          
+          # Supporting microservices
+          - name: presigned-url
+            dockerfile: Dockerfile.presigned-url-layered
+            requirements: requirements-presigned-url.txt
+            size: "~55MB"
+            memory: 256
+            timeout: 30
+          - name: pinecone-search
+            dockerfile: Dockerfile.pinecone-search-layered
+            requirements: requirements-pinecone-search.txt
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - name: pinecone-upsert
+            dockerfile: Dockerfile.pinecone-upsert-layered
+            requirements: requirements-pinecone-upsert.txt
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - name: neo4j-search
+            dockerfile: Dockerfile.neo4j-search-layered
+            requirements: requirements-neo4j-search.txt
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - name: neo4j-write
+            dockerfile: Dockerfile.neo4j-write-layered
+            requirements: requirements-neo4j-write.txt
+            size: "~155MB"
+            memory: 512
+            timeout: 60
+          - name: dynamodb-crud
+            dockerfile: Dockerfile.dynamodb-crud-layered
+            requirements: requirements-dynamodb-crud.txt
+            size: "~85MB"
+            memory: 256
+            timeout: 30
+          - name: s3-reader
+            dockerfile: Dockerfile.s3-reader-layered
+            requirements: requirements-s3-reader.txt
+            size: "~85MB"
+            memory: 256
+            timeout: 30
+          - name: chat-generator
+            dockerfile: Dockerfile.chat-generator-layered
+            requirements: requirements-chat-generator.txt
+            size: "~405MB"
+            memory: 1024
+            timeout: 300
+          - name: embedding-generator
+            dockerfile: Dockerfile.embedding-generator-layered
+            requirements: requirements-embedding-generator.txt
+            size: "~405MB"
+            memory: 1024
+            timeout: 120
+          - name: text-chunker
+            dockerfile: Dockerfile.text-chunker-layered
+            requirements: requirements-text-chunker.txt
+            size: "~55MB"
+            memory: 256
+            timeout: 30
+          - name: pdf-processor
+            dockerfile: Dockerfile.pdf-processor-layered
+            requirements: requirements-pdf-processor.txt
+            size: "~255MB"
+            memory: 1024
+            timeout: 120
+          - name: table-detector
+            dockerfile: Dockerfile.table-detector-layered
+            requirements: requirements-table-detector.txt
+            size: "~455MB"
+            memory: 1024
+            timeout: 240
+          - name: easyocr
+            dockerfile: Dockerfile.easyocr-layered
+            requirements: requirements-easyocr.txt
+            size: "~355MB"
+            memory: 1024
+            timeout: 180
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Clean up Docker and system memory
+      if: matrix.name == 'docling-unified'
+      run: |
+        echo "🧹 Cleaning up Docker and system memory for large build..."
+        
+        # Stop all running containers
+        docker stop $(docker ps -q) 2>/dev/null || true
+        
+        # Remove all containers
+        docker rm $(docker ps -aq) 2>/dev/null || true
+        
+        # Remove unused images (keep only latest)
+        docker image prune -f
+        
+        # Remove unused volumes
+        docker volume prune -f
+        
+        # Remove unused networks
+        docker network prune -f
+        
+        # Clear Docker build cache
+        docker builder prune -f
+        
+        # Clear system cache
+        sudo sync
+        echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+        
+        # Show available memory
+        free -h
+        df -h
+        
+        echo "✅ Memory cleanup completed"
+
+    - name: Ensure ECR Repository Exists
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        echo "🔍 Ensuring ECR repository exists for service: ${{ matrix.name }}"
+        
+        # Check if repository exists, create if it doesn't
+        if ! aws ecr describe-repositories --repository-names $ECR_REPOSITORY_PREFIX-${{ matrix.name }} --region $AWS_REGION >/dev/null 2>&1; then
+          echo "📦 Creating ECR repository: $ECR_REPOSITORY_PREFIX-${{ matrix.name }}"
+          aws ecr create-repository \
+            --repository-name $ECR_REPOSITORY_PREFIX-${{ matrix.name }} \
+            --region $AWS_REGION \
+            --image-scanning-configuration scanOnPush=true
+        else
+          echo "✅ ECR repository already exists: $ECR_REPOSITORY_PREFIX-${{ matrix.name }}"
+        fi
+
+    - name: Build Service ${{ matrix.name }}
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        echo "🏗️ Building service: ${{ matrix.name }} (${{ matrix.size }})"
+        
+        # Check if files exist
+        if [ ! -f "${{ matrix.dockerfile }}" ]; then
+          echo "❌ Dockerfile not found: ${{ matrix.dockerfile }}"
+          exit 1
+        fi
+        
+        if [ ! -f "${{ matrix.requirements }}" ]; then
+          echo "❌ Requirements file not found: ${{ matrix.requirements }}"
+          exit 1
+        fi
+        
+        # Build Docker image
+        if [ "${{ matrix.name }}" == "docling-unified" ]; then
+          echo "🚀 Building large docling-unified with memory optimization..."
+          # Use BuildKit for better memory management
+          export DOCKER_BUILDKIT=1
+          # Build with memory limits and optimization
+          docker build \
+            --memory=6g \
+            --memory-swap=8g \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -f ${{ matrix.dockerfile }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+        else
+          docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+        fi
+        
+        # Tag as latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+        
+        # Push both tags
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
+        
+        echo "✅ Built and pushed service: ${{ matrix.name }}"
+        
+        # Clean up after large builds
+        if [ "${{ matrix.name }}" == "docling-unified" ]; then
+          echo "🧹 Cleaning up after large build..."
+          # Remove the built image to free space
+          docker rmi $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG || true
+          docker rmi $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest || true
+          # Clear build cache
+          docker builder prune -f
+          echo "✅ Cleanup completed"
+        fi
+
+    - name: Deploy Service ${{ matrix.name }}
+      if: github.ref == 'refs/heads/main'
+      env:
+        IMAGE_URI: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_PREFIX }}-${{ matrix.name }}:${{ github.sha }}
+      run: |
+        echo "🚀 Deploying ${{ matrix.name }} microservice"
+        
+        # Check if function exists
+        if aws lambda get-function --function-name knowledgebot-${{ matrix.name }} >/dev/null 2>&1; then
+          echo "🔄 Updating existing microservice: knowledgebot-${{ matrix.name }}"
+          
+          # Update function code with retry logic
+          echo "🔄 Updating function code..."
+          for attempt in 1 2 3 4 5; do
+            echo "Attempt $attempt of 5"
+            if aws lambda update-function-code \
+              --function-name knowledgebot-${{ matrix.name }} \
+              --image-uri $IMAGE_URI \
+              --region $AWS_REGION; then
+              echo "✅ Function code updated successfully"
+              break
+            fi
+            
+            if [ $attempt -lt 5 ]; then
+              wait_time=$((attempt * 30))
+              echo "⏳ Waiting $wait_time seconds before retry..."
+              sleep $wait_time
+            else
+              echo "❌ Failed to update function code after 5 attempts"
+              exit 1
+            fi
+          done
+          
+          # Set environment variables based on service type
+          case "${{ matrix.name }}" in
+            "presigned-url")
+              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }}"
+              ;;
+            "docling-unified")
+              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},PROCESSED_DOCUMENTS_BUCKET=${{ secrets.PROCESSED_DOCUMENTS_BUCKET }},CHUNKS_TABLE=${{ secrets.CHUNKS_TABLE }},PINECONE_UPSERT_FUNCTION=${{ secrets.PINECONE_UPSERT_FUNCTION }},NEO4J_WRITE_FUNCTION=${{ secrets.NEO4J_WRITE_FUNCTION }}"
+              ;;
+            "agent-query")
+              ENV_VARS="PINECONE_SEARCH_FUNCTION=${{ secrets.PINECONE_SEARCH_FUNCTION }},NEO4J_SEARCH_FUNCTION=${{ secrets.NEO4J_SEARCH_FUNCTION }},DYNAMODB_READ_FUNCTION=${{ secrets.DYNAMODB_READ_FUNCTION }},S3_READER_FUNCTION=${{ secrets.S3_READER_FUNCTION }}"
+              ;;
+            "pinecone-search"|"pinecone-upsert")
+              ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},PINECONE_HOST=${{ secrets.PINECONE_HOST }},PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},PINECONE_ENVIRONMENT=${{ secrets.PINECONE_ENVIRONMENT }},PINECONE_METRIC=${{ secrets.PINECONE_METRIC }}"
+              ;;
+            "neo4j-search"|"neo4j-write")
+              ENV_VARS="NEO4J_URI=${{ secrets.NEO4J_URI }},NEO4J_USER=${{ secrets.NEO4J_USER }},NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}"
+              ;;
+            "embedding-generator")
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+              ;;
+            "chat-generator")
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+              ;;
+            *)
+              ENV_VARS=""
+              ;;
+          esac
+          
+          # Update function configuration with retry logic
+          echo "🔄 Updating function configuration..."
+          for attempt in 1 2 3 4 5; do
+            echo "Attempt $attempt of 5"
+            if [ -n "$ENV_VARS" ]; then
+              if aws lambda update-function-configuration \
+                --function-name knowledgebot-${{ matrix.name }} \
+                --memory-size ${{ matrix.memory }} \
+                --timeout ${{ matrix.timeout }} \
+                --environment Variables="{$ENV_VARS}" \
+                --region $AWS_REGION; then
+                echo "✅ Function configuration updated successfully"
+                break
+              fi
+            else
+              if aws lambda update-function-configuration \
+                --function-name knowledgebot-${{ matrix.name }} \
+                --memory-size ${{ matrix.memory }} \
+                --timeout ${{ matrix.timeout }} \
+                --region $AWS_REGION; then
+                echo "✅ Function configuration updated successfully"
+                break
+              fi
+            fi
+            
+            if [ $attempt -lt 5 ]; then
+              wait_time=$((attempt * 30))
+              echo "⏳ Waiting $wait_time seconds before retry..."
+              sleep $wait_time
+            else
+              echo "❌ Failed to update function configuration after 5 attempts"
+              exit 1
+            fi
+          done
+        else
+          echo "🆕 Creating new microservice: knowledgebot-${{ matrix.name }}"
+          
+          # Set environment variables based on service type
+          case "${{ matrix.name }}" in
+            "presigned-url")
+              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }}"
+              ;;
+            "docling-unified")
+              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},PROCESSED_DOCUMENTS_BUCKET=${{ secrets.PROCESSED_DOCUMENTS_BUCKET }},CHUNKS_TABLE=${{ secrets.CHUNKS_TABLE }},PINECONE_UPSERT_FUNCTION=${{ secrets.PINECONE_UPSERT_FUNCTION }},NEO4J_WRITE_FUNCTION=${{ secrets.NEO4J_WRITE_FUNCTION }}"
+              ;;
+            "agent-query")
+              ENV_VARS="PINECONE_SEARCH_FUNCTION=${{ secrets.PINECONE_SEARCH_FUNCTION }},NEO4J_SEARCH_FUNCTION=${{ secrets.NEO4J_SEARCH_FUNCTION }},DYNAMODB_READ_FUNCTION=${{ secrets.DYNAMODB_READ_FUNCTION }},S3_READER_FUNCTION=${{ secrets.S3_READER_FUNCTION }}"
+              ;;
+            "pinecone-search"|"pinecone-upsert")
+              ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},PINECONE_HOST=${{ secrets.PINECONE_HOST }},PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},PINECONE_ENVIRONMENT=${{ secrets.PINECONE_ENVIRONMENT }},PINECONE_METRIC=${{ secrets.PINECONE_METRIC }}"
+              ;;
+            "neo4j-search"|"neo4j-write")
+              ENV_VARS="NEO4J_URI=${{ secrets.NEO4J_URI }},NEO4J_USER=${{ secrets.NEO4J_USER }},NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}"
+              ;;
+            "embedding-generator")
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+              ;;
+            "chat-generator")
+              ENV_VARS="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+              ;;
+            *)
+              ENV_VARS=""
+              ;;
+          esac
+          
+          # Create new function
+          if [ -n "$ENV_VARS" ]; then
+            aws lambda create-function \
+              --function-name knowledgebot-${{ matrix.name }} \
+              --package-type Image \
+              --code ImageUri=$IMAGE_URI \
+              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+              --memory-size ${{ matrix.memory }} \
+              --timeout ${{ matrix.timeout }} \
+              --environment Variables="{$ENV_VARS}" \
+              --region $AWS_REGION
+          else
+            aws lambda create-function \
+              --function-name knowledgebot-${{ matrix.name }} \
+              --package-type Image \
+              --code ImageUri=$IMAGE_URI \
+              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+              --memory-size ${{ matrix.memory }} \
+              --timeout ${{ matrix.timeout }} \
+              --region $AWS_REGION
+          fi
+        fi
+        
+        echo "✅ Deployed knowledgebot-${{ matrix.name }} successfully"
+
+    - name: Output build details
+      run: |
+        echo "📦 Service: $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG"
+        echo "📏 Size: ${{ matrix.size }}"
+        echo "💾 Memory: ${{ matrix.memory }}MB"
+        echo "⏱️ Timeout: ${{ matrix.timeout }}s"
+
+  # Summary job
+  deployment-summary:
+    needs: [cleanup, build-services]
+    runs-on: ubuntu-latest
+    environment: chatbot
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Unified Architecture Deployment Summary
+      run: |
+        echo "🎉 KnowledgeBot Unified Architecture Deployment Complete!"
+        echo ""
+        echo "🏗️ Core Unified Services:"
+        echo "  • knowledgebot-docling-unified (3008MB, 900s, ~2.5GB) - Complete document processing pipeline"
+        echo "  • knowledgebot-agent-query (1024MB, 300s, ~200MB) - Intelligent query handling"
+        echo ""
+        echo "📋 Supporting Micro-Services (14 services):"
+        echo ""
+        echo "🔧 Core Services:"
+        echo "  • knowledgebot-presigned-url (256MB, 30s, ~55MB)"
+        echo "  • knowledgebot-s3-reader (256MB, 30s, ~85MB)"
+        echo "  • knowledgebot-pinecone-search (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-pinecone-upsert (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-neo4j-search (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-neo4j-write (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-dynamodb-crud (256MB, 30s, ~85MB)"
+        echo "  • knowledgebot-text-chunker (256MB, 30s, ~55MB)"
+        echo "  • knowledgebot-embedding-generator (1024MB, 120s, ~405MB)"
+        echo "  • knowledgebot-chat-generator (1024MB, 300s, ~405MB)"
+        echo ""
+        echo "📄 Processing Services:"
+        echo "  • knowledgebot-pdf-processor (1024MB, 120s, ~255MB)"
+        echo "  • knowledgebot-easyocr (1024MB, 180s, ~355MB)"
+        echo "  • knowledgebot-table-detector (1024MB, 240s, ~455MB)"
+        echo ""
+        echo "⚡ Unified Architecture Benefits:"
+        echo "  • S3 direct trigger for document processing"
+        echo "  • Single unified docling image"
+        echo "  • Intelligent agent query handling"
+        echo "  • Complete processing pipeline"
+        echo "  • GitHub Actions cleanup integration"
+        echo "  • Streamlined deployment process"
+        echo ""
+        echo "📊 Total Architecture:"
+        echo "  • Total Services: 16 (~4.1GB)"
+        echo "  • Build Time: ~10 minutes (parallel)"
+        echo "  • Redundancy: Minimal (unified approach)"
+        echo ""
+        echo "🔗 ECR Repositories:"
+        echo "  • Registry: ${{ env.ECR_REGISTRY }}"
+        echo "  • Prefix: ${{ env.ECR_REPOSITORY_PREFIX }}"
+        echo "  • Total Images: 16 services"
