@@ -932,7 +932,7 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
         # Run the intelligent agent
         result = await Runner.run(
             intelligent_agent,
-            input=user_query
+            user_query
         )
         
         # Extract response
@@ -948,7 +948,7 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
             # Process final response
             processed_response = await Runner.run(
                 intelligent_agent,
-                input=f"Process this response for UI display: {response_text}"
+                f"Process this response for UI display: {response_text}"
             )
             
             # Extract processed response
