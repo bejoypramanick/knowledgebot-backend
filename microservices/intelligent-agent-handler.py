@@ -15,8 +15,8 @@ from datetime import datetime
 import traceback
 
 # Type definitions for better Pydantic compatibility
-JsonValue = Union[str, int, float, bool, None, List['JsonValue'], Dict[str, 'JsonValue']]
-JsonDict = Dict[str, JsonValue]
+# Use simple types to avoid schema generation issues
+JsonDict = Dict[str, str]
 
 # Configure logging
 logger = logging.getLogger(__name__)
