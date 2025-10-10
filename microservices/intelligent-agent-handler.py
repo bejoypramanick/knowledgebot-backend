@@ -15,8 +15,26 @@ from datetime import datetime
 import traceback
 
 # Type definitions for better Pydantic compatibility
-# Use simple types to avoid schema generation issues
-JsonDict = Dict[str, str]
+# Use explicitly structured, fully defined types (not arbitrary/dynamic)
+from typing import TypedDict
+
+class VectorData(TypedDict):
+    id: str
+    values: str  # JSON string of float list
+    metadata: str  # JSON string of metadata dict
+
+class DynamoDBKey(TypedDict):
+    partition_key: str
+    sort_key: str
+
+class DynamoDBItem(TypedDict):
+    partition_key: str
+    sort_key: str
+    data: str  # JSON string of item data
+
+class SearchFilters(TypedDict):
+    namespace: str
+    metadata_filter: str  # JSON string of metadata filter
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -36,7 +54,7 @@ http_client = httpx.AsyncClient(timeout=300.0)
 # Microservice URLs (will be set via environment variables)
 MICROSERVICE_BASE_URL = os.environ.get('MICROSERVICE_BASE_URL', 'https://api.knowledgebot.com')
 
-async def call_microservice(service_name: str, endpoint: str, payload: JsonDict) -> JsonDict:
+async def call_microservice(service_name: str, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Call a microservice endpoint"""
     try:
         url = f"{MICROSERVICE_BASE_URL}/{service_name}/{endpoint}"
@@ -103,7 +121,7 @@ async def search_pinecone_tool(query_vector: str, limit: int = 10) -> str:
     return json.dumps(result)
 
 @function_tool
-async def upsert_pinecone_tool(vectors: str) -> str:
+async def upsert_pinecone_tool(vectors: List[VectorData]) -> str:
     """Store vectors in Pinecone"""
     result = await call_microservice("pinecone-upsert", "upsert", {
         "vectors": vectors
@@ -127,7 +145,7 @@ async def write_neo4j_tool(cypher_query: str) -> str:
     return json.dumps(result)
 
 @function_tool
-async def read_dynamodb_tool(table_name: str, key: JsonDict) -> str:
+async def read_dynamodb_tool(table_name: str, key: DynamoDBKey) -> str:
     """Read from DynamoDB"""
     result = await call_microservice("dynamodb-crud", "read", {
         "table_name": table_name,
@@ -136,7 +154,7 @@ async def read_dynamodb_tool(table_name: str, key: JsonDict) -> str:
     return json.dumps(result)
 
 @function_tool
-async def write_dynamodb_tool(table_name: str, item: JsonDict) -> str:
+async def write_dynamodb_tool(table_name: str, item: DynamoDBItem) -> str:
     """Write to DynamoDB"""
     result = await call_microservice("dynamodb-crud", "write", {
         "table_name": table_name,
@@ -145,7 +163,7 @@ async def write_dynamodb_tool(table_name: str, item: JsonDict) -> str:
     return json.dumps(result)
 
 @function_tool
-async def rag_search_tool(query: str, limit: int = 5, filters: Optional[JsonDict] = None) -> str:
+async def rag_search_tool(query: str, limit: int = 5, filters: Optional[SearchFilters] = None) -> str:
     """Perform comprehensive RAG search across all databases"""
     result = await call_microservice("rag-search", "search", {
         "query": query,
@@ -843,7 +861,7 @@ logger.info("✅ Intelligent Agent created with comprehensive tools and instruct
 # LAMBDA HANDLER
 # ============================================================================
 
-async def intelligent_agent_handler_async(event: JsonDict, context: Any) -> JsonDict:
+async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main intelligent agent handler"""
     try:
         logger.info("🤖 Intelligent Agent processing request")
@@ -931,6 +949,6 @@ async def intelligent_agent_handler_async(event: JsonDict, context: Any) -> Json
             })
         }
 
-def lambda_handler(event: JsonDict, context: Any) -> JsonDict:
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Lambda handler entry point"""
     return asyncio.run(intelligent_agent_handler_async(event, context))
