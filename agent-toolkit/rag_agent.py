@@ -16,8 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("✅ Configured logging in rag_agent")
 
-from agents import Agent, Runner, function_tool
-logger.info("✅ Imported openai-agents modules: Agent, Runner, function_tool")
+from openai import Agent, Runner, function_tool
+logger.info("✅ Imported OpenAI SDK modules: Agent, Runner, function_tool")
 
 from pydantic import BaseModel
 logger.info("✅ Imported pydantic.BaseModel")
@@ -284,7 +284,7 @@ def rag_search_with_hierarchical_context_tool(query: str, limit: int = 5, filter
 # RAG AGENT - PRODUCTION RAG PIPELINE
 # ============================================================================
 
-# Create the unified CRUD agent using openai-agents
+# Create the unified CRUD agent using OpenAI SDK
 rag_agent = Agent(
     name="RAG Agent",
     instructions="""You are a RAG Agent that handles intelligent document retrieval and generation using production RAG tools.
@@ -424,7 +424,7 @@ When you receive any query, immediately begin your intelligent analysis and use 
     ]
 )
 
-logger.info("✅ Created RAG Agent with all tools using openai-agents")
+logger.info("✅ Created RAG Agent with all tools using OpenAI SDK")
 
 class CRUDAgentInput(BaseModel):
     model_config = {"extra": "forbid"}  # Configure to not allow additional properties
@@ -439,7 +439,7 @@ class CRUDAgentInput(BaseModel):
 # ============================================================================
 
 async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[str, Any]:
-    """Run the unified CRUD processing workflow using openai-agents"""
+    """Run the unified CRUD processing workflow using OpenAI SDK"""
     start_time = time.time()
     
     try:
@@ -473,7 +473,7 @@ async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[st
             }
         )
         
-        # Run the unified CRUD agent using openai-agents
+        # Run the unified CRUD agent using OpenAI SDK
         crud_result = await Runner.run(
             rag_agent,
             input=workflow_input.user_query
@@ -495,7 +495,7 @@ async def run_unified_crud_processing(workflow_input: CRUDAgentInput) -> Dict[st
             "status": "success",
             "workflow_type": "unified_crud_processing",
             "agent_used": "rag_agent",
-            "tools_used": "openai-agents",
+            "tools_used": "openai-sdk",
             "business_logic": "ai_handled"
         }
         

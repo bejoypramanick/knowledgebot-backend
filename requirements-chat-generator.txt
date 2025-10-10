@@ -2,8 +2,7 @@
 # Chat response generation service
 # ~10 packages, ~400MB
 
-openai>=1.107.1,<2.0.0
-openai-agents>=0.3.3
+openai>=1.40.0,<2.0.0
 pydantic>=2.12.0
 orjson>=3.9.0
 httpx>=0.25.0

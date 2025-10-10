@@ -42,7 +42,7 @@ logger.setLevel(logging.INFO)
 
 # Import OpenAI Agents framework
 try:
-    from agents import Agent, Runner, function_tool
+    from openai import Agent, Runner, function_tool
     logger.info("✅ OpenAI Agents framework imported successfully")
 except ImportError as e:
     logger.error(f"❌ Failed to import OpenAI Agents: {e}")
