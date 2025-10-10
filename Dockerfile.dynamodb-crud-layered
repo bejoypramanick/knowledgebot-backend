@@ -1,10 +1,22 @@
 # Dockerfile.dynamodb-crud-layered
-# Minimal: Uses core layer (includes AWS SDK)
-# Target size: ~85MB (core + handler)
+# DynamoDB CRUD Handler - Minimal Lambda Function
+# Target size: ~85MB
 
-FROM knowledgebot-core-layer:latest
+FROM public.ecr.aws/lambda/python:3.12
+
+# Set environment variables for optimization
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PYTHONUNBUFFERED=1
+
+# Copy requirements and install Python dependencies
+COPY requirements-dynamodb-crud.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r requirements-dynamodb-crud.txt
 
 # Copy only the handler
 COPY microservices/dynamodb-crud-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+
+# Set proper permissions
+RUN chmod 755 ${LAMBDA_TASK_ROOT}/lambda_function.py
 
 CMD ["lambda_function.lambda_handler"]

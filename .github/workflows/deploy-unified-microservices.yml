@@ -99,10 +99,6 @@ jobs:
           "knowledgebot-s3-reader"
           "knowledgebot-chat-generator"
           "knowledgebot-embedding-generator"
-          "knowledgebot-text-chunker"
-          "knowledgebot-pdf-processor"
-          "knowledgebot-table-detector"
-          "knowledgebot-easyocr"
         )
         
         for repo in "${REPOSITORIES[@]}"; do
@@ -215,30 +211,6 @@ jobs:
             size: "~405MB"
             memory: 1024
             timeout: 120
-          - name: text-chunker
-            dockerfile: Dockerfile.text-chunker-layered
-            requirements: requirements-text-chunker.txt
-            size: "~55MB"
-            memory: 256
-            timeout: 30
-          - name: pdf-processor
-            dockerfile: Dockerfile.pdf-processor-layered
-            requirements: requirements-pdf-processor.txt
-            size: "~255MB"
-            memory: 1024
-            timeout: 120
-          - name: table-detector
-            dockerfile: Dockerfile.table-detector-layered
-            requirements: requirements-table-detector.txt
-            size: "~455MB"
-            memory: 1024
-            timeout: 240
-          - name: easyocr
-            dockerfile: Dockerfile.easyocr-layered
-            requirements: requirements-easyocr.txt
-            size: "~355MB"
-            memory: 1024
-            timeout: 180
     
     steps:
     - name: Checkout code
@@ -539,7 +511,7 @@ jobs:
         echo "  • knowledgebot-docling-unified (3008MB, 900s, ~2.5GB) - Complete document processing pipeline"
         echo "  • knowledgebot-agent-query (1024MB, 300s, ~200MB) - Intelligent query handling"
         echo ""
-        echo "📋 Supporting Micro-Services (14 services):"
+        echo "📋 Supporting Micro-Services (9 services):"
         echo ""
         echo "🔧 Core Services:"
         echo "  • knowledgebot-presigned-url (256MB, 30s, ~55MB)"
@@ -549,14 +521,8 @@ jobs:
         echo "  • knowledgebot-neo4j-search (512MB, 60s, ~155MB)"
         echo "  • knowledgebot-neo4j-write (512MB, 60s, ~155MB)"
         echo "  • knowledgebot-dynamodb-crud (256MB, 30s, ~85MB)"
-        echo "  • knowledgebot-text-chunker (256MB, 30s, ~55MB)"
         echo "  • knowledgebot-embedding-generator (1024MB, 120s, ~405MB)"
         echo "  • knowledgebot-chat-generator (1024MB, 300s, ~405MB)"
-        echo ""
-        echo "📄 Processing Services:"
-        echo "  • knowledgebot-pdf-processor (1024MB, 120s, ~255MB)"
-        echo "  • knowledgebot-easyocr (1024MB, 180s, ~355MB)"
-        echo "  • knowledgebot-table-detector (1024MB, 240s, ~455MB)"
         echo ""
         echo "⚡ Unified Architecture Benefits:"
         echo "  • S3 direct trigger for document processing"
@@ -568,11 +534,11 @@ jobs:
         echo "  • Streamlined deployment process"
         echo ""
         echo "📊 Total Architecture:"
-        echo "  • Total Services: 16 (~4.1GB)"
-        echo "  • Build Time: ~10 minutes (parallel)"
+        echo "  • Total Services: 11 (~2.8GB)"
+        echo "  • Build Time: ~8 minutes (parallel)"
         echo "  • Redundancy: Minimal (unified approach)"
         echo ""
         echo "🔗 ECR Repositories:"
         echo "  • Registry: ${{ env.ECR_REGISTRY }}"
         echo "  • Prefix: ${{ env.ECR_REPOSITORY_PREFIX }}"
-        echo "  • Total Images: 16 services"
+        echo "  • Total Images: 11 services"
