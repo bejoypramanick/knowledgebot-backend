@@ -1,5 +1,5 @@
-# Dockerfile.s3-reader-layered
-# S3 Reader Handler - Minimal Lambda Function
+# Dockerfile.s3-unified
+# S3 Unified Handler - Single Lambda Function
 # Target size: ~85MB
 
 FROM public.ecr.aws/lambda/python:3.12
@@ -10,11 +10,11 @@ ENV PIP_NO_CACHE_DIR=1
 ENV PYTHONUNBUFFERED=1
 
 # Copy requirements and install Python dependencies
-COPY requirements-s3-reader.txt ${LAMBDA_TASK_ROOT}/
-RUN pip install --no-cache-dir -r requirements-s3-reader.txt
+COPY requirements-s3-unified.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r requirements-s3-unified.txt
 
 # Copy only the handler
-COPY microservices/s3-reader-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+COPY microservices/s3-unified-handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
 
 # Set proper permissions
 RUN chmod 755 ${LAMBDA_TASK_ROOT}/lambda_function.py

@@ -90,13 +90,10 @@ jobs:
         REPOSITORIES=(
           "knowledgebot-docling-unified"
           "knowledgebot-agent-query"
-          "knowledgebot-presigned-url"
-          "knowledgebot-pinecone-search"
-          "knowledgebot-pinecone-upsert"
-          "knowledgebot-neo4j-search"
-          "knowledgebot-neo4j-write"
+          "knowledgebot-s3-unified"
+          "knowledgebot-pinecone-unified"
+          "knowledgebot-neo4j-unified"
           "knowledgebot-dynamodb-crud"
-          "knowledgebot-s3-reader"
           "knowledgebot-chat-generator"
           "knowledgebot-embedding-generator"
         )
@@ -157,45 +154,27 @@ jobs:
             timeout: 300
           
           # Supporting microservices
-          - name: presigned-url
-            dockerfile: Dockerfile.presigned-url-layered
-            requirements: requirements-presigned-url.txt
-            size: "~55MB"
+          - name: s3-unified
+            dockerfile: Dockerfile.s3-unified
+            requirements: requirements-s3-unified.txt
+            size: "~85MB"
             memory: 256
             timeout: 30
-          - name: pinecone-search
-            dockerfile: Dockerfile.pinecone-search-layered
-            requirements: requirements-pinecone-search.txt
+          - name: pinecone-unified
+            dockerfile: Dockerfile.pinecone-unified
+            requirements: requirements-pinecone-unified.txt
             size: "~155MB"
             memory: 512
             timeout: 60
-          - name: pinecone-upsert
-            dockerfile: Dockerfile.pinecone-upsert-layered
-            requirements: requirements-pinecone-upsert.txt
-            size: "~155MB"
-            memory: 512
-            timeout: 60
-          - name: neo4j-search
-            dockerfile: Dockerfile.neo4j-search-layered
-            requirements: requirements-neo4j-search.txt
-            size: "~155MB"
-            memory: 512
-            timeout: 60
-          - name: neo4j-write
-            dockerfile: Dockerfile.neo4j-write-layered
-            requirements: requirements-neo4j-write.txt
+          - name: neo4j-unified
+            dockerfile: Dockerfile.neo4j-unified
+            requirements: requirements-neo4j-unified.txt
             size: "~155MB"
             memory: 512
             timeout: 60
           - name: dynamodb-crud
             dockerfile: Dockerfile.dynamodb-crud-layered
             requirements: requirements-dynamodb-crud.txt
-            size: "~85MB"
-            memory: 256
-            timeout: 30
-          - name: s3-reader
-            dockerfile: Dockerfile.s3-reader-layered
-            requirements: requirements-s3-reader.txt
             size: "~85MB"
             memory: 256
             timeout: 30
@@ -511,15 +490,12 @@ jobs:
         echo "  • knowledgebot-docling-unified (3008MB, 900s, ~2.5GB) - Complete document processing pipeline"
         echo "  • knowledgebot-agent-query (1024MB, 300s, ~200MB) - Intelligent query handling"
         echo ""
-        echo "📋 Supporting Micro-Services (9 services):"
+        echo "📋 Supporting Micro-Services (6 services):"
         echo ""
         echo "🔧 Core Services:"
-        echo "  • knowledgebot-presigned-url (256MB, 30s, ~55MB)"
-        echo "  • knowledgebot-s3-reader (256MB, 30s, ~85MB)"
-        echo "  • knowledgebot-pinecone-search (512MB, 60s, ~155MB)"
-        echo "  • knowledgebot-pinecone-upsert (512MB, 60s, ~155MB)"
-        echo "  • knowledgebot-neo4j-search (512MB, 60s, ~155MB)"
-        echo "  • knowledgebot-neo4j-write (512MB, 60s, ~155MB)"
+        echo "  • knowledgebot-s3-unified (256MB, 30s, ~85MB) - Presigned URLs, reading, listing"
+        echo "  • knowledgebot-pinecone-unified (512MB, 60s, ~155MB) - Search and upsert operations"
+        echo "  • knowledgebot-neo4j-unified (512MB, 60s, ~155MB) - Graph search and write operations"
         echo "  • knowledgebot-dynamodb-crud (256MB, 30s, ~85MB)"
         echo "  • knowledgebot-embedding-generator (1024MB, 120s, ~405MB)"
         echo "  • knowledgebot-chat-generator (1024MB, 300s, ~405MB)"
@@ -534,11 +510,11 @@ jobs:
         echo "  • Streamlined deployment process"
         echo ""
         echo "📊 Total Architecture:"
-        echo "  • Total Services: 11 (~2.8GB)"
-        echo "  • Build Time: ~8 minutes (parallel)"
+        echo "  • Total Services: 8 (~2.8GB)"
+        echo "  • Build Time: ~6 minutes (parallel)"
         echo "  • Redundancy: Minimal (unified approach)"
         echo ""
         echo "🔗 ECR Repositories:"
         echo "  • Registry: ${{ env.ECR_REGISTRY }}"
         echo "  • Prefix: ${{ env.ECR_REPOSITORY_PREFIX }}"
-        echo "  • Total Images: 11 services"
+        echo "  • Total Images: 8 services"

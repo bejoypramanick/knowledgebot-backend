@@ -1,8 +1,0 @@
-# requirements-neo4j-search.txt
-# Minimal: Only Neo4j graph search
-# ~4 packages, ~30MB
-
-neo4j>=5.24.0
-pydantic>=2.12.0
-orjson>=3.9.0
-httpx>=0.25.0
