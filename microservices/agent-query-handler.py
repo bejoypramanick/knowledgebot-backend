@@ -314,8 +314,9 @@ async def process_query_intelligently(query: str, conversation_history: List[Dic
             "processing_time": (datetime.now() - start_time).total_seconds()
         }
 
+@production_error_handler
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """Lambda handler for intelligent query processing"""
+    """Lambda handler for intelligent query processing with production error handling"""
     logger.info("=== AGENT QUERY HANDLER STARTED ===")
     
     try:
@@ -333,7 +334,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "statusCode": 400,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({
-                    "error": "Query is required"
+                    "error": "Query is required",
+                    "error_category": "missing_query"
                 })
             }
         
@@ -353,11 +355,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Error in Lambda handler: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json"},
             "body": json.dumps({
-                "error": str(e),
+                "error": "I apologize, but I encountered an error while processing your request. Please try again.",
+                "error_category": "internal_error",
                 "error_type": type(e).__name__
             })
         }
