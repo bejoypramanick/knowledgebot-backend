@@ -42,7 +42,7 @@ logger.setLevel(logging.INFO)
 
 # Import OpenAI client and Pydantic
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 logger.info("✅ OpenAI client and Pydantic imported successfully")
 
 # Initialize OpenAI client
@@ -61,48 +61,145 @@ class Runner:
     async def run(agent, input_text):
         # Convert our function tools to OpenAI format
         openai_tools = []
+        tool_functions = {}
+        
         for tool in agent.tools:
             if hasattr(tool, '__name__'):
                 # This is a function tool
                 openai_tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": tool.__name__,
-                        "description": tool.__doc__ or f"Tool: {tool.__name__}",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "input": {"type": "string", "description": "Input for the tool"}
-                            },
-                            "required": ["input"]
-                        }
+                    "name": tool.__name__,
+                    "description": tool.__doc__ or f"Tool: {tool.__name__}",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "input": {"type": "string", "description": "Input for the tool"}
+                        },
+                        "required": ["input"]
                     }
                 })
+                tool_functions[tool.__name__] = tool
         
-        # Use OpenAI chat completions with function calling
-        response = openai_client.chat.completions.create(
-            model=agent.model,
-            messages=[
-                {"role": "system", "content": agent.instructions},
-                {"role": "user", "content": input_text}
-            ],
-            tools=openai_tools if openai_tools else None,
-            tool_choice="auto" if openai_tools else None,
-            max_tokens=1000,
-            temperature=0.7
-        )
+        # Use OpenAI responses API with function calling
+        messages = [
+            {"role": "system", "content": agent.instructions},
+            {"role": "user", "content": input_text}
+        ]
         
-        class Result:
-            def __init__(self, content):
-                self.final_output = content
-        
-        # Extract the response content
-        message = response.choices[0].message
-        if message.content:
-            return Result(message.content)
-        else:
-            # Handle function calls if any
-            return Result("Function call detected but not implemented in this simplified version")
+        try:
+            response = openai_client.responses.create(
+                model=agent.model,
+                input=messages,
+                tools=openai_tools if openai_tools else None,
+            )
+            
+            msg = response.output[0]
+            
+            if msg.type == "message" and msg.content[0].type == "output_text":
+                # Model finished reasoning
+                result_text = msg.content[0].text
+                
+                class Result:
+                    def __init__(self, content):
+                        self.final_output = content
+                
+                return Result(result_text)
+            
+            elif msg.type == "message" and msg.content[0].type == "tool_call":
+                # Model wants to call a tool
+                tool_name = msg.content[0].name
+                args = msg.content[0].arguments
+                
+                logger.info(f"🛠️ Model calls: {tool_name}({args})")
+                
+                # Execute the tool
+                if tool_name in tool_functions:
+                    try:
+                        # Create a simple input model for the tool
+                        class ToolInput(BaseModel):
+                            input: str = Field(..., description="Input for the tool")
+                        
+                        tool_input = ToolInput(input=str(args))
+                        result = await tool_functions[tool_name](tool_input.input)
+                        
+                        # Send tool result back to the model
+                        messages.append({
+                            "role": "assistant",
+                            "content": [{"type": "tool_result", "tool_name": tool_name, "result": result}]
+                        })
+                        
+                        # Continue the conversation
+                        response = openai_client.responses.create(
+                            model=agent.model,
+                            input=messages,
+                            tools=openai_tools if openai_tools else None,
+                        )
+                        
+                        msg = response.output[0]
+                        if msg.type == "message" and msg.content[0].type == "output_text":
+                            result_text = msg.content[0].text
+                        else:
+                            result_text = f"Tool {tool_name} executed successfully"
+                        
+                        class Result:
+                            def __init__(self, content):
+                                self.final_output = content
+                        
+                        return Result(result_text)
+                        
+                    except Exception as e:
+                        logger.error(f"Error executing tool {tool_name}: {e}")
+                        result_text = f"Error executing tool {tool_name}: {str(e)}"
+                        
+                        class Result:
+                            def __init__(self, content):
+                                self.final_output = content
+                        
+                        return Result(result_text)
+                else:
+                    result_text = f"Unknown tool: {tool_name}"
+                    
+                    class Result:
+                        def __init__(self, content):
+                            self.final_output = content
+                    
+                    return Result(result_text)
+            else:
+                logger.warning(f"⚠️ Unexpected output: {msg}")
+                result_text = "Unexpected response from model"
+                
+                class Result:
+                    def __init__(self, content):
+                        self.final_output = content
+                
+                return Result(result_text)
+                
+        except Exception as e:
+            logger.error(f"Error in OpenAI responses API: {e}")
+            # Fallback to simple chat completion
+            try:
+                response = openai_client.chat.completions.create(
+                    model=agent.model,
+                    messages=[
+                        {"role": "system", "content": agent.instructions},
+                        {"role": "user", "content": input_text}
+                    ],
+                    max_tokens=1000,
+                    temperature=0.7
+                )
+                
+                class Result:
+                    def __init__(self, content):
+                        self.final_output = content
+                
+                return Result(response.choices[0].message.content)
+            except Exception as e2:
+                logger.error(f"Fallback also failed: {e2}")
+                
+                class Result:
+                    def __init__(self, content):
+                        self.final_output = content
+                
+                return Result(f"Error: {str(e2)}")
 
 def function_tool(func):
     return func
