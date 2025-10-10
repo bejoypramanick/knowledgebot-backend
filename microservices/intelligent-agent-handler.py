@@ -879,7 +879,13 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
         if not user_query:
             return {
                 "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Credentials": "true"
+                },
                 "body": json.dumps({"error": "Query is required"})
             }
         
@@ -923,7 +929,13 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
         
         return {
             "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
             "body": json.dumps({
                 "success": True,
                 "response": ui_optimized_response,
@@ -941,7 +953,13 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
         
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
             "body": json.dumps({
                 "success": False,
                 "error": str(e),
