@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      force_rebuild_all:
+        description: 'Force rebuild all services (ignore change detection)'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   AWS_REGION: ap-south-1
@@ -31,11 +37,21 @@ jobs:
       run: |
         echo "🔍 Detecting changes since last deployment..."
         
-        # Get the last successful deployment commit
-        LAST_DEPLOYMENT=$(git log --oneline --grep="Deploy" --grep="deploy" --grep="Deployment" -i -n 1 --format="%H" || echo "")
+        # Check if force rebuild is requested
+        if [ "${{ github.event.inputs.force_rebuild_all }}" = "true" ]; then
+          echo "🔄 Force rebuild requested, rebuilding everything"
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          echo "changed-layers=base-layer,core-layer,database-layer,ml-layer,pdf-processor-layer,easyocr-layer,table-detector-layer,docling-core-layer,docling-full-layer" >> $GITHUB_OUTPUT
+          echo "changed-services=presigned-url,s3-reader,pinecone-search,pinecone-upsert,neo4j-search,neo4j-write,dynamodb-crud,text-chunker,embedding-generator,rag-search,chat-generator,pdf-processor,easyocr,table-detector,docling-core,docling-full" >> $GITHUB_OUTPUT
+          exit 0
+        fi
         
-        if [ -z "$LAST_DEPLOYMENT" ]; then
-          echo "No previous deployment found, rebuilding everything"
+        # Get the last successful deployment commit
+        LAST_DEPLOYMENT=$(git log --oneline --grep="Deploy" --grep="deploy" --grep="Deployment" --grep="deploy-microservices" --grep="deploy-parallel" -i -n 1 --format="%H" || echo "")
+        
+        # If no previous deployment found, or if we're on the same commit, rebuild everything
+        if [ -z "$LAST_DEPLOYMENT" ] || [ "$LAST_DEPLOYMENT" = "$(git rev-parse HEAD)" ]; then
+          echo "No previous deployment found or same commit, rebuilding everything"
           echo "has-changes=true" >> $GITHUB_OUTPUT
           echo "changed-layers=base-layer,core-layer,database-layer,ml-layer,pdf-processor-layer,easyocr-layer,table-detector-layer,docling-core-layer,docling-full-layer" >> $GITHUB_OUTPUT
           echo "changed-services=presigned-url,s3-reader,pinecone-search,pinecone-upsert,neo4j-search,neo4j-write,dynamodb-crud,text-chunker,embedding-generator,rag-search,chat-generator,pdf-processor,easyocr,table-detector,docling-core,docling-full" >> $GITHUB_OUTPUT
@@ -43,11 +59,21 @@ jobs:
         fi
         
         echo "Last deployment commit: $LAST_DEPLOYMENT"
+        echo "Current commit: $(git rev-parse HEAD)"
         
         # Get changed files
         CHANGED_FILES=$(git diff --name-only $LAST_DEPLOYMENT..HEAD)
         echo "Changed files:"
         echo "$CHANGED_FILES"
+        
+        # If no files changed, still rebuild everything (safety measure)
+        if [ -z "$CHANGED_FILES" ]; then
+          echo "No files changed since last deployment, rebuilding everything for safety"
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          echo "changed-layers=base-layer,core-layer,database-layer,ml-layer,pdf-processor-layer,easyocr-layer,table-detector-layer,docling-core-layer,docling-full-layer" >> $GITHUB_OUTPUT
+          echo "changed-services=presigned-url,s3-reader,pinecone-search,pinecone-upsert,neo4j-search,neo4j-write,dynamodb-crud,text-chunker,embedding-generator,rag-search,chat-generator,pdf-processor,easyocr,table-detector,docling-core,docling-full" >> $GITHUB_OUTPUT
+          exit 0
+        fi
         
         # Initialize arrays
         CHANGED_LAYERS=""
