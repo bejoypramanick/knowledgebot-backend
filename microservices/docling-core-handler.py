@@ -338,3 +338,4 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "error": f"Core processing failed: {str(e)}"
             })
         }
+
