@@ -93,7 +93,7 @@ async def generate_embeddings_tool(texts: List[str]) -> str:
     return json.dumps(result)
 
 @function_tool
-async def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> str:
+async def search_pinecone_tool(query_vector: str, limit: int = 10) -> str:
     """Search Pinecone vector database"""
     result = await call_microservice("pinecone-search", "search", {
         "query_vector": query_vector,
@@ -103,7 +103,7 @@ async def search_pinecone_tool(query_vector: List[float], limit: int = 10) -> st
     return json.dumps(result)
 
 @function_tool
-async def upsert_pinecone_tool(vectors: List[Dict[str, str]]) -> str:
+async def upsert_pinecone_tool(vectors: str) -> str:
     """Store vectors in Pinecone"""
     result = await call_microservice("pinecone-upsert", "upsert", {
         "vectors": vectors
