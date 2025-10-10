@@ -10,7 +10,7 @@ on:
       force_rebuild_all:
         description: 'Force rebuild all services (ignore change detection)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 env:
