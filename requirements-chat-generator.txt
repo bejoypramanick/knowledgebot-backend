@@ -1,5 +1,5 @@
 # requirements-chat-generator.txt
-# Medium: Chat response generation
+# Chat response generation service
 # ~10 packages, ~400MB
 
 openai>=1.107.1,<2.0.0
@@ -10,5 +10,3 @@ httpx>=0.25.0
 requests>=2.31.0
 structlog>=23.2.0
 typing-extensions>=4.9.0
-asyncio
-json

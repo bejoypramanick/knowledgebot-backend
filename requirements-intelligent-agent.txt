@@ -21,11 +21,3 @@ botocore>=1.34.0
 
 # Logging and monitoring
 structlog>=23.2.0
-
-# Async support
-asyncio
-json
-os
-logging
-traceback
-datetime
