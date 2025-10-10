@@ -116,11 +116,52 @@ async def call_microservice(service_name: str, endpoint: str, payload: Dict[str,
 @function_tool
 async def get_presigned_url_tool(filename: str, content_type: str = "application/pdf") -> str:
     """Get a presigned URL for file upload to S3"""
-    result = await call_microservice("presigned-url", "upload", {
-        "filename": filename,
-        "content_type": content_type
-    })
-    return json.dumps(result)
+    try:
+        import boto3
+        import uuid
+        from datetime import datetime, timedelta
+        
+        # Initialize S3 client
+        s3_client = boto3.client('s3')
+        
+        # Generate unique S3 key
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        s3_key = f"uploads/{timestamp}_{unique_id}_{filename}"
+        
+        # Get bucket name from environment
+        bucket_name = os.environ.get('DOCUMENTS_BUCKET', 'knowledgebot-documents')
+        
+        # Generate presigned URL for PUT operation
+        presigned_url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': bucket_name,
+                'Key': s3_key,
+                'ContentType': content_type,
+                'Metadata': {
+                    'original_filename': filename,
+                    'upload_timestamp': timestamp,
+                    'upload_id': unique_id
+                }
+            },
+            ExpiresIn=3600  # URL expires in 1 hour
+        )
+        
+        return json.dumps({
+            "success": True,
+            "presigned_url": presigned_url,
+            "s3_key": s3_key,
+            "bucket": bucket_name,
+            "filename": filename,
+            "content_type": content_type,
+            "expires_in": 3600,
+            "message": f"Presigned URL generated for {filename}"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating presigned URL: {e}")
+        return json.dumps({"success": False, "error": str(e)})
 
 @function_tool
 async def read_s3_document_tool(s3_url: str) -> str:
@@ -245,68 +286,6 @@ async def process_docling_core_tool(document_bytes: str, filename: str) -> str:
     })
     return json.dumps(result)
 
-@function_tool
-async def process_direct_upload_tool(filename: str, content: str, document_type: str = "pdf", metadata: str = "{}") -> str:
-    """Process a direct file upload with base64 content"""
-    try:
-        import base64
-        import boto3
-        import uuid
-        from datetime import datetime
-        
-        # Initialize S3 client
-        s3_client = boto3.client('s3')
-        
-        # Decode base64 content
-        try:
-            file_bytes = base64.b64decode(content)
-        except Exception as e:
-            return json.dumps({"success": False, "error": f"Failed to decode base64 content: {str(e)}"})
-        
-        # Generate unique S3 key
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_id = str(uuid.uuid4())[:8]
-        s3_key = f"uploads/{timestamp}_{unique_id}_{filename}"
-        
-        # Upload to S3
-        bucket_name = os.environ.get('DOCUMENTS_BUCKET', 'knowledgebot-documents')
-        
-        try:
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key=s3_key,
-                Body=file_bytes,
-                ContentType=f"application/{document_type}",
-                Metadata={
-                    'original_filename': filename,
-                    'document_type': document_type,
-                    'upload_timestamp': timestamp,
-                    'upload_id': unique_id
-                }
-            )
-            
-            s3_url = f"s3://{bucket_name}/{s3_key}"
-            
-            # Now process the document using docling
-            result = await process_docling_core_tool(content, filename)
-            
-            return json.dumps({
-                "success": True,
-                "message": f"Document '{filename}' uploaded and processed successfully",
-                "s3_url": s3_url,
-                "s3_key": s3_key,
-                "filename": filename,
-                "document_type": document_type,
-                "processing_result": result,
-                "metadata": metadata
-            })
-            
-        except Exception as e:
-            return json.dumps({"success": False, "error": f"Failed to upload to S3: {str(e)}"})
-            
-    except Exception as e:
-        logger.error(f"Error processing direct upload: {e}")
-        return json.dumps({"success": False, "error": str(e)})
 
 # ============================================================================
 # RESPONSE PROCESSING TOOLS
@@ -711,10 +690,9 @@ You are the single point of intelligence that handles ALL user requests, makes A
 ## 📋 AVAILABLE MICROSERVICES & TOOLS
 
 ### Document Management:
-- **get_presigned_url_tool**: Get S3 upload URLs for file uploads
+- **get_presigned_url_tool**: Get S3 presigned URLs for secure file uploads
 - **read_s3_document_tool**: Read documents from S3 storage
 - **chunk_text_tool**: Split text into processable chunks
-- **process_direct_upload_tool**: Process direct file uploads with base64 content
 
 ### AI & ML Processing:
 - **generate_embeddings_tool**: Create vector embeddings for text
@@ -922,7 +900,6 @@ Remember: You are the INTELLIGENCE. You make ALL decisions. You coordinate ALL t
         get_presigned_url_tool,
         read_s3_document_tool,
         chunk_text_tool,
-        process_direct_upload_tool,
         
         # AI & ML Processing Tools
         generate_embeddings_tool,
@@ -970,13 +947,12 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
         action = body.get('action', '')
         
         if action == 'upload':
-            # Handle direct file upload
+            # Handle presigned URL generation for file upload
             filename = body.get('filename', '')
-            content = body.get('content', '')
             document_type = body.get('document_type', 'pdf')
             metadata = body.get('metadata', {})
             
-            if not filename or not content:
+            if not filename:
                 return {
                     "statusCode": 400,
                     "headers": {
@@ -986,12 +962,12 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
                         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
                         "Access-Control-Allow-Credentials": "true"
                     },
-                    "body": json.dumps({"error": "Filename and content are required for upload"})
+                    "body": json.dumps({"error": "Filename is required for upload"})
                 }
             
-            # Process the upload using intelligent agent
-            user_query = f"Upload and process document: {filename} (type: {document_type})"
-            logger.info(f"📁 Processing file upload: {filename}")
+            # Generate presigned URL for upload
+            user_query = f"Generate presigned URL for uploading document: {filename} (type: {document_type})"
+            logger.info(f"📁 Generating presigned URL for: {filename}")
             
         else:
             # Handle regular chat/knowledge queries
