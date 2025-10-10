@@ -41,50 +41,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Import OpenAI Agents framework
-try:
-    from openai import Agent, Runner, function_tool
-    logger.info("✅ OpenAI Agents framework imported successfully")
-except ImportError as e:
-    logger.error(f"❌ Failed to import OpenAI Agents: {e}")
-    # Fallback to basic OpenAI client
-    try:
-        import openai
-        logger.info("✅ OpenAI client imported as fallback")
-        # Create a simple wrapper for compatibility
-        class Agent:
-            def __init__(self, name, instructions, model, tools=None):
-                self.name = name
-                self.instructions = instructions
-                self.model = model
-                self.tools = tools or []
-        
-        class Runner:
-            @staticmethod
-            async def run(agent, input_text):
-                # Simple implementation using OpenAI chat completions
-                response = openai.chat.completions.create(
-                    model=agent.model,
-                    messages=[
-                        {"role": "system", "content": agent.instructions},
-                        {"role": "user", "content": input_text}
-                    ],
-                    max_tokens=1000,
-                    temperature=0.7
-                )
-                
-                class Result:
-                    def __init__(self, content):
-                        self.final_output = content
-                
-                return Result(response.choices[0].message.content)
-        
-        def function_tool(func):
-            return func
-        
-        logger.info("✅ Fallback OpenAI implementation created")
-    except ImportError as e2:
-        logger.error(f"❌ Failed to import OpenAI client: {e2}")
-        raise
+from openai import Agent, Runner, function_tool
+logger.info("✅ OpenAI Agents framework imported successfully")
 
 # Initialize HTTP client for microservice calls
 http_client = httpx.AsyncClient(timeout=300.0)

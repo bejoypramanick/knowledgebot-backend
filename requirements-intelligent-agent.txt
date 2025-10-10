@@ -3,7 +3,7 @@
 # Central orchestrator with OpenAI Agents framework
 
 # Core OpenAI and Agent Framework
-openai>=1.50.0,<2.0.0
+openai>=1.50.0
 
 # HTTP client for microservice communication
 httpx>=0.25.0
