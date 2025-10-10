@@ -113,6 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: chatbot
     strategy:
+      max-parallel: 3
       matrix:
         include:
           # Core Micro-Services
@@ -302,10 +303,26 @@ jobs:
         if aws lambda get-function --function-name knowledgebot-${{ matrix.name }} >/dev/null 2>&1; then
           echo "🔄 Updating existing microservice: knowledgebot-${{ matrix.name }}"
           
-          # Update function code
-          aws lambda update-function-code \
-            --function-name knowledgebot-${{ matrix.name }} \
-            --image-uri $IMAGE_URI
+          # Update function code with retry logic
+          echo "🔄 Updating function code..."
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt of 3"
+            if aws lambda update-function-code \
+              --function-name knowledgebot-${{ matrix.name }} \
+              --image-uri $IMAGE_URI \
+              --region $AWS_REGION; then
+              echo "✅ Function code updated successfully"
+              break
+            fi
+            
+            if [ $attempt -lt 3 ]; then
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            else
+              echo "❌ Failed to update function code after 3 attempts"
+              exit 1
+            fi
+          done
           
           # Set environment variables based on service type
           case "${{ matrix.name }}" in
@@ -332,19 +349,39 @@ jobs:
               ;;
           esac
           
-          # Update function configuration
-          if [ -n "$ENV_VARS" ]; then
-            aws lambda update-function-configuration \
-              --function-name knowledgebot-${{ matrix.name }} \
-              --memory-size ${{ matrix.memory }} \
-              --timeout ${{ matrix.timeout }} \
-              --environment Variables="{$ENV_VARS}"
-          else
-            aws lambda update-function-configuration \
-              --function-name knowledgebot-${{ matrix.name }} \
-              --memory-size ${{ matrix.memory }} \
-              --timeout ${{ matrix.timeout }}
-          fi
+          # Update function configuration with retry logic
+          echo "🔄 Updating function configuration..."
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt of 3"
+            if [ -n "$ENV_VARS" ]; then
+              if aws lambda update-function-configuration \
+                --function-name knowledgebot-${{ matrix.name }} \
+                --memory-size ${{ matrix.memory }} \
+                --timeout ${{ matrix.timeout }} \
+                --environment Variables="{$ENV_VARS}" \
+                --region $AWS_REGION; then
+                echo "✅ Function configuration updated successfully"
+                break
+              fi
+            else
+              if aws lambda update-function-configuration \
+                --function-name knowledgebot-${{ matrix.name }} \
+                --memory-size ${{ matrix.memory }} \
+                --timeout ${{ matrix.timeout }} \
+                --region $AWS_REGION; then
+                echo "✅ Function configuration updated successfully"
+                break
+              fi
+            fi
+            
+            if [ $attempt -lt 3 ]; then
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            else
+              echo "❌ Failed to update function configuration after 3 attempts"
+              exit 1
+            fi
+          done
         else
           echo "🆕 Creating new microservice: knowledgebot-${{ matrix.name }}"
           
