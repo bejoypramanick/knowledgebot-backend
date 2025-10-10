@@ -53,9 +53,9 @@ jobs:
           - name: docling-core-layer
             dockerfile: layers/Dockerfile.docling-core-layer
             size: "~500MB"
-          - name: docling-full-layer
-            dockerfile: layers/Dockerfile.docling-full-layer
-            size: "~1.2GB"
+          - name: docling-ocr-layer
+            dockerfile: layers/Dockerfile.docling-ocr-layer
+            size: "~800MB"
     
     steps:
     - name: Checkout code
@@ -215,12 +215,12 @@ jobs:
             size: "~555MB"
             memory: 1024
             timeout: 300
-          - name: docling-full
-            dockerfile: Dockerfile.docling-full-layered
-            base_layer: docling-full-layer
-            size: "~1.25GB"
-            memory: 2048
-            timeout: 900
+          - name: docling-ocr
+            dockerfile: Dockerfile.docling-ocr-layered
+            base_layer: docling-ocr-layer
+            size: "~855MB"
+            memory: 1024
+            timeout: 300
     
     steps:
     - name: Checkout code
