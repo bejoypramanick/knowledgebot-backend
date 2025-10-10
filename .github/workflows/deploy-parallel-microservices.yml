@@ -221,12 +221,6 @@ jobs:
             size: "~855MB"
             memory: 1024
             timeout: 300
-          - name: docling-serverless
-            dockerfile: Dockerfile.docling-serverless
-            base_layer: none
-            size: "~2.5GB"
-            memory: 3008
-            timeout: 300
     
     steps:
     - name: Checkout code
