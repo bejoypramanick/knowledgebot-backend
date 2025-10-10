@@ -13,105 +13,221 @@ env:
   ECR_REPOSITORY_PREFIX: knowledgebot
 
 jobs:
-  # Build all layers in parallel first
+  # Detect changes and determine what needs to be rebuilt
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed-layers: ${{ steps.changes.outputs.layers }}
+      changed-services: ${{ steps.changes.outputs.services }}
+      has-changes: ${{ steps.changes.outputs.has-changes }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for proper diff
+
+    - name: Detect changes
+      id: changes
+      run: |
+        echo "🔍 Detecting changes since last deployment..."
+        
+        # Get the last successful deployment commit
+        LAST_DEPLOYMENT=$(git log --oneline --grep="Deploy" --grep="deploy" --grep="Deployment" -i -n 1 --format="%H" || echo "")
+        
+        if [ -z "$LAST_DEPLOYMENT" ]; then
+          echo "No previous deployment found, rebuilding everything"
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          echo "changed-layers=base-layer,core-layer,database-layer,ml-layer,pdf-processor-layer,easyocr-layer,table-detector-layer,docling-core-layer,docling-full-layer" >> $GITHUB_OUTPUT
+          echo "changed-services=presigned-url,s3-reader,pinecone-search,pinecone-upsert,neo4j-search,neo4j-write,dynamodb-crud,text-chunker,embedding-generator,rag-search,chat-generator,pdf-processor,easyocr,table-detector,docling-core,docling-full" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        echo "Last deployment commit: $LAST_DEPLOYMENT"
+        
+        # Get changed files
+        CHANGED_FILES=$(git diff --name-only $LAST_DEPLOYMENT..HEAD)
+        echo "Changed files:"
+        echo "$CHANGED_FILES"
+        
+        # Initialize arrays
+        CHANGED_LAYERS=""
+        CHANGED_SERVICES=""
+        HAS_CHANGES="false"
+        
+        # Check for layer changes
+        if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile\."; then
+          echo "📦 Layer Dockerfiles changed"
+          HAS_CHANGES="true"
+          
+          # Map specific layer changes
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.base-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,base-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,presigned-url,text-chunker"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.core-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,core-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,s3-reader,dynamodb-crud"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.database-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,database-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,pinecone-search,pinecone-upsert,neo4j-search,neo4j-write"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.ml-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,ml-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,embedding-generator,rag-search,chat-generator"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.pdf-processor-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,pdf-processor-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,pdf-processor"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.easyocr-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,easyocr-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,easyocr"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.table-detector-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,table-detector-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,table-detector"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.docling-core-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,docling-core-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,docling-core"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "layers/Dockerfile.docling-full-layer"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,docling-full-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,docling-full"
+          fi
+        fi
+        
+        # Check for requirements file changes
+        if echo "$CHANGED_FILES" | grep -q "requirements-.*\.txt"; then
+          echo "📋 Requirements files changed"
+          HAS_CHANGES="true"
+          
+          # Map requirements changes to layers
+          if echo "$CHANGED_FILES" | grep -q "requirements-base-layer.txt"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,base-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,presigned-url,text-chunker"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "requirements-core-layer.txt"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,core-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,s3-reader,dynamodb-crud"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "requirements-database-layer.txt"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,database-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,pinecone-search,pinecone-upsert,neo4j-search,neo4j-write"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "requirements-ml-layer.txt"; then
+            CHANGED_LAYERS="$CHANGED_LAYERS,ml-layer"
+            CHANGED_SERVICES="$CHANGED_SERVICES,embedding-generator,rag-search,chat-generator"
+          fi
+        fi
+        
+        # Check for service-specific changes
+        if echo "$CHANGED_FILES" | grep -q "Dockerfile\..*-layered"; then
+          echo "🐳 Service Dockerfiles changed"
+          HAS_CHANGES="true"
+          
+          # Map specific service changes
+          for file in $(echo "$CHANGED_FILES" | grep "Dockerfile\..*-layered"); do
+            service_name=$(echo "$file" | sed 's/Dockerfile\.\(.*\)-layered/\1/')
+            CHANGED_SERVICES="$CHANGED_SERVICES,$service_name"
+          done
+        fi
+        
+        # Check for handler changes
+        if echo "$CHANGED_FILES" | grep -q "microservices/.*-handler\.py"; then
+          echo "🐍 Handler files changed"
+          HAS_CHANGES="true"
+          
+          # Map handler changes to services
+          for file in $(echo "$CHANGED_FILES" | grep "microservices/.*-handler\.py"); do
+            service_name=$(echo "$file" | sed 's/microservices\/\(.*\)-handler\.py/\1/')
+            CHANGED_SERVICES="$CHANGED_SERVICES,$service_name"
+          done
+        fi
+        
+        # Check for shared files that affect all services
+        if echo "$CHANGED_FILES" | grep -qE "(agent-toolkit/|\.github/workflows/)"; then
+          echo "🔧 Shared files changed, rebuilding all services"
+          HAS_CHANGES="true"
+          CHANGED_SERVICES="presigned-url,s3-reader,pinecone-search,pinecone-upsert,neo4j-search,neo4j-write,dynamodb-crud,text-chunker,embedding-generator,rag-search,chat-generator,pdf-processor,easyocr,table-detector,docling-core,docling-full"
+        fi
+        
+        # Clean up comma-separated lists
+        CHANGED_LAYERS=$(echo "$CHANGED_LAYERS" | sed 's/^,//' | sed 's/,,/,/g')
+        CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | sed 's/^,//' | sed 's/,,/,/g')
+        
+        # Output results
+        echo "has-changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+        echo "changed-layers=$CHANGED_LAYERS" >> $GITHUB_OUTPUT
+        echo "changed-services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
+        
+        echo "📊 Change Summary:"
+        echo "  Has changes: $HAS_CHANGES"
+        echo "  Changed layers: $CHANGED_LAYERS"
+        echo "  Changed services: $CHANGED_SERVICES"
+
+  # Build changed layers in parallel
   build-layers:
     runs-on: ubuntu-latest
     environment: chatbot
-    strategy:
-      matrix:
-        include:
-          # Base Layers (all independent now)
-          - name: base-layer
-            dockerfile: layers/Dockerfile.base-layer
-            size: "~50MB"
-          - name: core-layer
-            dockerfile: layers/Dockerfile.core-layer
-            size: "~80MB"
-          - name: database-layer
-            dockerfile: layers/Dockerfile.database-layer
-            size: "~150MB"
-          - name: ml-layer
-            dockerfile: layers/Dockerfile.ml-layer
-            size: "~400MB"
-          
-          # Granular OCR Layers
-          - name: pdf-processor-layer
-            dockerfile: layers/Dockerfile.pdf-processor-layer
-            size: "~200MB"
-          - name: easyocr-layer
-            dockerfile: layers/Dockerfile.easyocr-layer
-            size: "~300MB"
-          - name: table-detector-layer
-            dockerfile: layers/Dockerfile.table-detector-layer
-            size: "~400MB"
-          - name: docling-core-layer
-            dockerfile: layers/Dockerfile.docling-core-layer
-            size: "~500MB"
-          - name: docling-full-layer
-            dockerfile: layers/Dockerfile.docling-full-layer
-            size: "~1.2GB"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-
-    - name: Ensure ECR Repository Exists
+    - name: Build changed layers
       env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        CHANGED_LAYERS: ${{ needs.detect-changes.outputs.changed-layers }}
       run: |
-        echo "🔍 Ensuring ECR repository exists for layer: ${{ matrix.name }}"
+        echo "🔍 Building only changed layers: $CHANGED_LAYERS"
         
-        # Check if repository exists, create if it doesn't
-        if ! aws ecr describe-repositories --repository-names $ECR_REPOSITORY_PREFIX-${{ matrix.name }} --region $AWS_REGION >/dev/null 2>&1; then
-          echo "📦 Creating ECR repository: $ECR_REPOSITORY_PREFIX-${{ matrix.name }}"
-          aws ecr create-repository \
-            --repository-name $ECR_REPOSITORY_PREFIX-${{ matrix.name }} \
-            --region $AWS_REGION \
-            --image-scanning-configuration scanOnPush=true
-        else
-          echo "✅ ECR repository already exists: $ECR_REPOSITORY_PREFIX-${{ matrix.name }}"
-        fi
+        # Define layer configurations
+        declare -A LAYER_CONFIGS
+        LAYER_CONFIGS[base-layer]="layers/Dockerfile.base-layer:~50MB"
+        LAYER_CONFIGS[core-layer]="layers/Dockerfile.core-layer:~80MB"
+        LAYER_CONFIGS[database-layer]="layers/Dockerfile.database-layer:~150MB"
+        LAYER_CONFIGS[ml-layer]="layers/Dockerfile.ml-layer:~400MB"
+        LAYER_CONFIGS[pdf-processor-layer]="layers/Dockerfile.pdf-processor-layer:~200MB"
+        LAYER_CONFIGS[easyocr-layer]="layers/Dockerfile.easyocr-layer:~300MB"
+        LAYER_CONFIGS[table-detector-layer]="layers/Dockerfile.table-detector-layer:~400MB"
+        LAYER_CONFIGS[docling-core-layer]="layers/Dockerfile.docling-core-layer:~500MB"
+        LAYER_CONFIGS[docling-full-layer]="layers/Dockerfile.docling-full-layer:~1.2GB"
+        
+        # Configure AWS credentials
+        aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws configure set default.region ${{ env.AWS_REGION }}
+        
+        # Login to ECR
+        aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+        
+        # Build each changed layer
+        IFS=',' read -ra LAYERS <<< "$CHANGED_LAYERS"
+        for layer in "${LAYERS[@]}"; do
+          if [ -n "$layer" ] && [ "${LAYER_CONFIGS[$layer]+_}" ]; then
+            echo "📦 Building layer: $layer"
+            dockerfile=$(echo "${LAYER_CONFIGS[$layer]}" | cut -d':' -f1)
+            size=$(echo "${LAYER_CONFIGS[$layer]}" | cut -d':' -f2)
+            
+            # Build and push the layer
+            docker build -f "$dockerfile" -t "${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_PREFIX }}-$layer:${{ github.sha }}" .
+            docker push "${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_PREFIX }}-$layer:${{ github.sha }}"
+            
+            echo "✅ Built and pushed $layer ($size)"
+          fi
+        done
+        
+        echo "🎉 All changed layers built successfully"
 
-    - name: Build Layer ${{ matrix.name }}
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        echo "🏗️ Building layer: ${{ matrix.name }} (${{ matrix.size }})"
-        
-        # Build layer directly
-        docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
-        
-        # Tag as latest
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
-        
-        # Push both tags
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
-        
-        echo "✅ Built and pushed layer: ${{ matrix.name }}"
-
-    - name: Output build details
-      run: |
-        echo "📦 Layer: $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG"
-        echo "📏 Size: ${{ matrix.size }}"
-
-  # Build all services in parallel after layers are ready
+  # Build changed services in parallel after layers are ready
   build-services:
-    needs: build-layers
+    needs: [detect-changes, build-layers]
     runs-on: ubuntu-latest
     environment: chatbot
+    if: needs.detect-changes.outputs.has-changes == 'true'
     strategy:
       max-parallel: 3
       matrix:
