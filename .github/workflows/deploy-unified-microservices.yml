@@ -22,6 +22,7 @@ jobs:
   # Cleanup before build
   cleanup:
     runs-on: ubuntu-latest
+    environment: chatbot
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -32,6 +33,12 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
+
+    - name: Verify AWS credentials
+      run: |
+        echo "🔍 Verifying AWS credentials..."
+        aws sts get-caller-identity
+        echo "✅ AWS credentials verified successfully"
 
     - name: Login to Amazon ECR
       id: login-ecr
@@ -207,6 +214,12 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
+
+    - name: Verify AWS credentials
+      run: |
+        echo "🔍 Verifying AWS credentials..."
+        aws sts get-caller-identity
+        echo "✅ AWS credentials verified successfully"
 
     - name: Login to Amazon ECR
       id: login-ecr
