@@ -246,13 +246,67 @@ async def process_docling_core_tool(document_bytes: str, filename: str) -> str:
     return json.dumps(result)
 
 @function_tool
-async def process_docling_ocr_tool(document_bytes: str, filename: str) -> str:
-    """Process document with Docling OCR functionality"""
-    result = await call_microservice("docling-ocr", "process", {
-        "document_bytes": document_bytes,
-        "filename": filename
-    })
-    return json.dumps(result)
+async def process_direct_upload_tool(filename: str, content: str, document_type: str = "pdf", metadata: str = "{}") -> str:
+    """Process a direct file upload with base64 content"""
+    try:
+        import base64
+        import boto3
+        import uuid
+        from datetime import datetime
+        
+        # Initialize S3 client
+        s3_client = boto3.client('s3')
+        
+        # Decode base64 content
+        try:
+            file_bytes = base64.b64decode(content)
+        except Exception as e:
+            return json.dumps({"success": False, "error": f"Failed to decode base64 content: {str(e)}"})
+        
+        # Generate unique S3 key
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        s3_key = f"uploads/{timestamp}_{unique_id}_{filename}"
+        
+        # Upload to S3
+        bucket_name = os.environ.get('DOCUMENTS_BUCKET', 'knowledgebot-documents')
+        
+        try:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file_bytes,
+                ContentType=f"application/{document_type}",
+                Metadata={
+                    'original_filename': filename,
+                    'document_type': document_type,
+                    'upload_timestamp': timestamp,
+                    'upload_id': unique_id
+                }
+            )
+            
+            s3_url = f"s3://{bucket_name}/{s3_key}"
+            
+            # Now process the document using docling
+            result = await process_docling_core_tool(content, filename)
+            
+            return json.dumps({
+                "success": True,
+                "message": f"Document '{filename}' uploaded and processed successfully",
+                "s3_url": s3_url,
+                "s3_key": s3_key,
+                "filename": filename,
+                "document_type": document_type,
+                "processing_result": result,
+                "metadata": metadata
+            })
+            
+        except Exception as e:
+            return json.dumps({"success": False, "error": f"Failed to upload to S3: {str(e)}"})
+            
+    except Exception as e:
+        logger.error(f"Error processing direct upload: {e}")
+        return json.dumps({"success": False, "error": str(e)})
 
 # ============================================================================
 # RESPONSE PROCESSING TOOLS
@@ -660,6 +714,7 @@ You are the single point of intelligence that handles ALL user requests, makes A
 - **get_presigned_url_tool**: Get S3 upload URLs for file uploads
 - **read_s3_document_tool**: Read documents from S3 storage
 - **chunk_text_tool**: Split text into processable chunks
+- **process_direct_upload_tool**: Process direct file uploads with base64 content
 
 ### AI & ML Processing:
 - **generate_embeddings_tool**: Create vector embeddings for text
@@ -867,6 +922,7 @@ Remember: You are the INTELLIGENCE. You make ALL decisions. You coordinate ALL t
         get_presigned_url_tool,
         read_s3_document_tool,
         chunk_text_tool,
+        process_direct_upload_tool,
         
         # AI & ML Processing Tools
         generate_embeddings_tool,
@@ -910,22 +966,51 @@ async def intelligent_agent_handler_async(event: Dict[str, Any], context: Any) -
         else:
             body = event.get('body', event)
         
-        user_query = body.get('query') or body.get('message') or body.get('text', '')
-        conversation_history = body.get('conversation_history', [])
-        user_preferences = body.get('user_preferences', {})
+        # Handle different request types
+        action = body.get('action', '')
         
-        if not user_query:
-            return {
-                "statusCode": 400,
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Credentials": "true"
-                },
-                "body": json.dumps({"error": "Query is required"})
-            }
+        if action == 'upload':
+            # Handle direct file upload
+            filename = body.get('filename', '')
+            content = body.get('content', '')
+            document_type = body.get('document_type', 'pdf')
+            metadata = body.get('metadata', {})
+            
+            if not filename or not content:
+                return {
+                    "statusCode": 400,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Credentials": "true"
+                    },
+                    "body": json.dumps({"error": "Filename and content are required for upload"})
+                }
+            
+            # Process the upload using intelligent agent
+            user_query = f"Upload and process document: {filename} (type: {document_type})"
+            logger.info(f"📁 Processing file upload: {filename}")
+            
+        else:
+            # Handle regular chat/knowledge queries
+            user_query = body.get('query') or body.get('message') or body.get('text', '')
+            conversation_history = body.get('conversation_history', [])
+            user_preferences = body.get('user_preferences', {})
+            
+            if not user_query:
+                return {
+                    "statusCode": 400,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Credentials": "true"
+                    },
+                    "body": json.dumps({"error": "Query is required"})
+                }
         
         logger.info(f"📝 Processing query: {user_query[:100]}...")
         
