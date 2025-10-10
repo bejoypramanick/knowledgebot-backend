@@ -130,9 +130,120 @@ jobs:
         
         echo "✅ ECR cleanup completed"
 
+  # Ensure ECR repositories exist and Lambda permissions are correct
+  setup-ecr-permissions:
+    runs-on: ubuntu-latest
+    environment: chatbot
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Verify AWS credentials
+      run: aws sts get-caller-identity
+    
+    - name: Ensure ECR repositories exist
+      run: |
+        echo "🏗️ Ensuring all ECR repositories exist..."
+        
+        REPOSITORIES=(
+          "knowledgebot-docling-unified"
+          "knowledgebot-agent-query"
+          "knowledgebot-s3-unified"
+          "knowledgebot-pinecone-unified"
+          "knowledgebot-neo4j-unified"
+          "knowledgebot-dynamodb-crud"
+          "knowledgebot-chat-generator"
+          "knowledgebot-embedding-generator"
+        )
+        
+        for repo in "${REPOSITORIES[@]}"; do
+          echo "📦 Checking repository: $repo"
+          if aws ecr describe-repositories --repository-names "$repo" --region "$AWS_REGION" &>/dev/null; then
+            echo "✅ Repository $repo exists"
+          else
+            echo "🆕 Creating repository: $repo"
+            aws ecr create-repository \
+              --repository-name "$repo" \
+              --region "$AWS_REGION" \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256
+            echo "✅ Repository $repo created"
+          fi
+        done
+    
+    - name: Ensure Lambda execution role has ECR permissions
+      run: |
+        echo "🔐 Ensuring Lambda execution role has ECR permissions..."
+        
+        # Create comprehensive ECR policy
+        cat > ecr-policy.json << EOF
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "ecr:GetAuthorizationToken",
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:BatchGetImage",
+                        "ecr:DescribeRepositories",
+                        "ecr:DescribeImages"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:BatchGetImage",
+                        "ecr:DescribeRepositories",
+                        "ecr:DescribeImages"
+                    ],
+                    "Resource": "arn:aws:ecr:$AWS_REGION:${{ secrets.AWS_ACCOUNT_ID }}:repository/*"
+                }
+            ]
+        }
+        EOF
+        
+        # Attach ECR policy to Lambda execution role
+        aws iam put-role-policy \
+          --role-name lambda-execution-role \
+          --policy-name LambdaECRAccessComprehensive \
+          --policy-document file://ecr-policy.json \
+          --region "$AWS_REGION"
+        
+        # Ensure basic Lambda execution role is attached
+        aws iam attach-role-policy \
+          --role-name lambda-execution-role \
+          --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole \
+          --region "$AWS_REGION" || echo "Basic execution role already attached"
+        
+        # Ensure S3 access is attached
+        aws iam attach-role-policy \
+          --role-name lambda-execution-role \
+          --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess \
+          --region "$AWS_REGION" || echo "S3 access already attached"
+        
+        # Ensure DynamoDB access is attached
+        aws iam attach-role-policy \
+          --role-name lambda-execution-role \
+          --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess \
+          --region "$AWS_REGION" || echo "DynamoDB access already attached"
+        
+        echo "✅ Lambda execution role permissions updated"
+        
+        # Clean up
+        rm -f ecr-policy.json
+
   # Build all microservices in parallel
   build-services:
-    needs: cleanup
+    needs: [cleanup, setup-ecr-permissions]
     runs-on: ubuntu-latest
     environment: chatbot
     strategy:
@@ -491,7 +602,7 @@ jobs:
 
   # Summary job
   deployment-summary:
-    needs: [cleanup, build-services]
+    needs: [cleanup, setup-ecr-permissions, build-services]
     runs-on: ubuntu-latest
     environment: chatbot
     if: github.ref == 'refs/heads/main'
