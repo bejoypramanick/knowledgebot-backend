@@ -17,6 +17,7 @@ env:
   AWS_REGION: ap-south-1
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
   ECR_REPOSITORY_PREFIX: knowledgebot
+  MICROSERVICE_BASE_URL: https://api.knowledgebot.com
 
 jobs:
   # Build all layers in parallel first
@@ -226,6 +227,12 @@ jobs:
             base_layer: none
             size: "~2.5GB"
             memory: 3008
+            timeout: 300
+          - name: intelligent-agent
+            dockerfile: Dockerfile.intelligent-agent
+            base_layer: none
+            size: "~200MB"
+            memory: 1024
             timeout: 300
     
     steps:

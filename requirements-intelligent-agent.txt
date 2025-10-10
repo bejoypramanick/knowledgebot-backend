@@ -1,0 +1,31 @@
+# requirements-intelligent-agent.txt
+# Intelligent Agent Microservice Requirements
+# Central orchestrator with OpenAI Agents framework
+
+# Core OpenAI and Agent Framework
+openai>=1.107.1,<2.0.0
+openai-agents>=0.3.3
+
+# HTTP client for microservice communication
+httpx>=0.25.0
+requests>=2.31.0
+
+# Data processing and validation
+pydantic>=2.12.0
+typing-extensions>=4.9.0
+orjson>=3.9.0
+
+# AWS SDK for Lambda environment
+boto3>=1.34.0
+botocore>=1.34.0
+
+# Logging and monitoring
+structlog>=23.2.0
+
+# Async support
+asyncio
+json
+os
+logging
+traceback
+datetime
