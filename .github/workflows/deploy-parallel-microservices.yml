@@ -221,6 +221,12 @@ jobs:
             size: "~855MB"
             memory: 1024
             timeout: 300
+          - name: docling-serverless
+            dockerfile: Dockerfile.docling-serverless
+            base_layer: none
+            size: "~2.5GB"
+            memory: 3008
+            timeout: 300
     
     steps:
     - name: Checkout code
@@ -241,17 +247,31 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
       run: |
-        echo "🔍 Ensuring ECR repository exists for base layer: ${{ matrix.base_layer }}"
+        echo "🔍 Ensuring ECR repository exists for service: ${{ matrix.name }}"
         
         # Check if repository exists, create if it doesn't
-        if ! aws ecr describe-repositories --repository-names $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }} --region $AWS_REGION >/dev/null 2>&1; then
-          echo "📦 Creating ECR repository: $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}"
+        if ! aws ecr describe-repositories --repository-names $ECR_REPOSITORY_PREFIX-${{ matrix.name }} --region $AWS_REGION >/dev/null 2>&1; then
+          echo "📦 Creating ECR repository: $ECR_REPOSITORY_PREFIX-${{ matrix.name }}"
           aws ecr create-repository \
-            --repository-name $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }} \
+            --repository-name $ECR_REPOSITORY_PREFIX-${{ matrix.name }} \
             --region $AWS_REGION \
             --image-scanning-configuration scanOnPush=true
         else
-          echo "✅ ECR repository already exists: $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}"
+          echo "✅ ECR repository already exists: $ECR_REPOSITORY_PREFIX-${{ matrix.name }}"
+        fi
+        
+        # For services with base layers, ensure base layer repository exists
+        if [ "${{ matrix.base_layer }}" != "none" ] && [ -n "${{ matrix.base_layer }}" ]; then
+          echo "🔍 Ensuring base layer ECR repository exists: ${{ matrix.base_layer }}"
+          if ! aws ecr describe-repositories --repository-names $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }} --region $AWS_REGION >/dev/null 2>&1; then
+            echo "📦 Creating base layer ECR repository: $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}"
+            aws ecr create-repository \
+              --repository-name $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }} \
+              --region $AWS_REGION \
+              --image-scanning-configuration scanOnPush=true
+          else
+            echo "✅ Base layer ECR repository already exists: $ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}"
+          fi
         fi
 
     - name: Build Service ${{ matrix.name }}
@@ -259,35 +279,43 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        echo "📦 Building service: ${{ matrix.name }} using ${{ matrix.base_layer }}"
+        echo "🏗️ Building service: ${{ matrix.name }} (${{ matrix.size }})"
         
-        # Import the base layer from ECR with retry mechanism
-        max_retries=5
-        retry_count=0
-        
-        while [ $retry_count -lt $max_retries ]; do
-          echo "🔄 Attempting to pull base layer (attempt $((retry_count + 1))/$max_retries)..."
+        if [ "${{ matrix.base_layer }}" != "none" ] && [ -n "${{ matrix.base_layer }}" ]; then
+          echo "📦 Using base layer: ${{ matrix.base_layer }}"
           
-          if docker pull $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:latest; then
-            echo "✅ Successfully pulled base layer"
-            break
-          else
-            retry_count=$((retry_count + 1))
-            if [ $retry_count -lt $max_retries ]; then
-              echo "⏳ Waiting 30 seconds before retry..."
-              sleep 30
+          # Import the base layer from ECR with retry mechanism
+          max_retries=5
+          retry_count=0
+          
+          while [ $retry_count -lt $max_retries ]; do
+            echo "🔄 Attempting to pull base layer (attempt $((retry_count + 1))/$max_retries)..."
+            
+            if docker pull $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:latest; then
+              echo "✅ Successfully pulled base layer"
+              break
             else
-              echo "❌ Failed to pull base layer after $max_retries attempts"
-              exit 1
+              retry_count=$((retry_count + 1))
+              if [ $retry_count -lt $max_retries ]; then
+                echo "⏳ Waiting 30 seconds before retry..."
+                sleep 30
+              else
+                echo "❌ Failed to pull base layer after $max_retries attempts"
+                exit 1
+              fi
             fi
-          fi
-        done
-        
-        # Tag it locally for the build
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:latest knowledgebot-${{ matrix.base_layer }}:latest
-        
-        # Build the service using the imported layer
-        docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+          done
+          
+          # Tag it locally for the build
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.base_layer }}:latest knowledgebot-${{ matrix.base_layer }}:latest
+          
+          # Build the service using the imported layer
+          docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+        else
+          echo "📦 Building standalone service (no base layer)"
+          # Build service directly without base layer
+          docker build -f ${{ matrix.dockerfile }} -t $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG .
+        fi
         
         # Tag as latest
         docker tag $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_PREFIX-${{ matrix.name }}:latest
