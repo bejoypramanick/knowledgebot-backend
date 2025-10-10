@@ -25,18 +25,6 @@ logger.setLevel(logging.INFO)
 # Import OpenAI Agents framework
 try:
     from agents import Agent, Runner, function_tool
-    from pydantic import BaseModel
-    from typing import Any
-    
-    # SafeModel to handle Pydantic schema compatibility
-    class SafeModel(BaseModel):
-        def model_json_schema(self, *args, **kwargs) -> dict[str, Any]:
-            schema = super().model_json_schema(*args, **kwargs)
-            # Remove invalid "additionalProperties" if present
-            if 'additionalProperties' in schema:
-                schema.pop('additionalProperties')
-            return schema
-    
     logger.info("✅ OpenAI Agents framework imported successfully")
 except ImportError as e:
     logger.error(f"❌ Failed to import OpenAI Agents: {e}")
