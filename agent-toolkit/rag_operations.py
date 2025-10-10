@@ -301,10 +301,10 @@ def rag_chunk_document_crud(document_text: str, chunk_size: int = 1000, chunk_ov
 
 def rag_process_document_with_docling_crud(document_path: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
     """
-    CRUD: Process document using Docling with hierarchical semantic chunking
+    CRUD: Process document with intelligent Docling routing
     
     Args:
-        document_path: Path to document file
+        document_path: Path to document (S3 URI or local path)
         document_id: Optional document ID
         namespace: Pinecone namespace
         
@@ -312,72 +312,161 @@ def rag_process_document_with_docling_crud(document_path: str, document_id: str 
         Processing result with hierarchical chunks
     """
     try:
-        # Get Docling processor
-        processor = get_docling_processor()
+        # Read document bytes
+        if document_path.startswith('s3://'):
+            # Read from S3
+            import boto3
+            s3 = boto3.client('s3')
+            bucket, key = document_path[5:].split('/', 1)
+            response = s3.get_object(Bucket=bucket, Key=key)
+            document_bytes = response['Body'].read()
+            filename = key.split('/')[-1]
+        else:
+            # Read from local path
+            with open(document_path, 'rb') as f:
+                document_bytes = f.read()
+            filename = Path(document_path).name
         
-        # Process document with Docling
-        result = processor.process_document(document_path, document_id)
+        # Use intelligent document orchestrator
+        orchestrator_result = call_document_orchestrator(document_bytes, filename, document_id)
         
-        if not result.success:
+        if not orchestrator_result.get('success'):
             return {
                 'success': False,
-                'error': f"Docling processing failed: {result.error_message}",
-                'document_id': result.document_id,
+                'error': f"Document processing failed: {orchestrator_result.get('error', 'Unknown error')}",
+                'document_id': document_id,
                 'docling_fallback_used': False
             }
         
-        # Convert Docling chunks to RAG format
+        # Convert result to RAG format
         rag_chunks = []
-        for chunk in result.hierarchical_chunks:
-            rag_chunk = {
-                'text': chunk['content'],
-                'metadata': {
-                    'chunk_id': chunk['chunk_id'],
-                    'chunk_type': chunk['chunk_type'],
-                    'hierarchy_level': chunk['hierarchy_level'],
-                    'section_path': chunk['section_path'],
-                    'word_count': chunk['metadata']['word_count'],
-                    'char_count': chunk['metadata']['char_count'],
-                    'page_number': chunk['metadata']['page_number'],
-                    'confidence_score': chunk['metadata']['confidence_score'],
-                    'chunk_index': chunk['metadata']['chunk_index']
+        
+        # Handle different result formats
+        if 'hierarchical_chunks' in orchestrator_result:
+            # Docling full result
+            for chunk in orchestrator_result['hierarchical_chunks']:
+                rag_chunk = {
+                    'text': chunk.get('content', ''),
+                    'metadata': {
+                        'chunk_id': chunk.get('chunk_id', f"{document_id}_chunk_{len(rag_chunks)}"),
+                        'chunk_type': chunk.get('element_type', 'text'),
+                        'hierarchy_level': chunk.get('hierarchy_level', 0),
+                        'section_path': chunk.get('section_path', ''),
+                        'word_count': len(chunk.get('content', '').split()),
+                        'char_count': len(chunk.get('content', '')),
+                        'page_number': chunk.get('page_number'),
+                        'confidence_score': chunk.get('confidence', 1.0),
+                        'chunk_index': len(rag_chunks)
+                    }
                 }
-            }
-            rag_chunks.append(rag_chunk)
+                rag_chunks.append(rag_chunk)
+        
+        elif 'pages' in orchestrator_result:
+            # PDF with pages
+            for page in orchestrator_result['pages']:
+                rag_chunk = {
+                    'text': page.get('text', ''),
+                    'metadata': {
+                        'chunk_id': f"{document_id}_page_{page.get('page_number', len(rag_chunks))}",
+                        'chunk_type': 'page',
+                        'hierarchy_level': 0,
+                        'section_path': f"Page {page.get('page_number', len(rag_chunks))}",
+                        'word_count': len(page.get('text', '').split()),
+                        'char_count': len(page.get('text', '')),
+                        'page_number': page.get('page_number'),
+                        'confidence_score': page.get('ocr_confidence', 1.0),
+                        'chunk_index': len(rag_chunks)
+                    }
+                }
+                rag_chunks.append(rag_chunk)
+        
+        else:
+            # Simple text result
+            text = orchestrator_result.get('text', '')
+            if text:
+                rag_chunk = {
+                    'text': text,
+                    'metadata': {
+                        'chunk_id': f"{document_id}_chunk_0",
+                        'chunk_type': 'text',
+                        'hierarchy_level': 0,
+                        'section_path': 'Document',
+                        'word_count': len(text.split()),
+                        'char_count': len(text),
+                        'page_number': 1,
+                        'confidence_score': 1.0,
+                        'chunk_index': 0
+                    }
+                }
+                rag_chunks.append(rag_chunk)
         
         # Store in RAG system
         if rag_chunks:
             upsert_result = rag_upsert_document_crud(
-                document_id=result.document_id,
+                document_id=document_id or orchestrator_result.get('document_id'),
                 chunks=rag_chunks,
-                metadata=result.metadata or {},
+                metadata=orchestrator_result.get('metadata', {}),
                 namespace=namespace
             )
             
             return {
                 'success': True,
-                'document_id': result.document_id,
-                'document_type': result.document_type,
-                'total_chunks': result.total_chunks,
+                'document_id': document_id or orchestrator_result.get('document_id'),
+                'document_type': orchestrator_result.get('file_extension', 'unknown'),
+                'total_chunks': len(rag_chunks),
                 'hierarchical_chunks': rag_chunks,
-                'processing_time': result.processing_time,
+                'processing_time': orchestrator_result.get('processing_time', 0),
                 'upsert_result': upsert_result,
-                'metadata': result.metadata
+                'metadata': orchestrator_result.get('metadata', {}),
+                'processing_strategy': orchestrator_result.get('processing_strategy', 'unknown'),
+                'analysis': orchestrator_result.get('analysis', {})
             }
         else:
             return {
                 'success': False,
                 'error': 'No chunks generated from document',
-                'document_id': result.document_id
+                'document_id': document_id
             }
             
     except Exception as e:
-        logger.error(f"Error processing document with Docling: {e}")
+        logger.error(f"Error processing document with intelligent Docling: {e}")
         return {
             'success': False,
-            'error': f"Docling processing failed: {str(e)}",
+            'error': f"Document processing failed: {str(e)}",
             'document_id': document_id,
             'docling_fallback_used': False
+        }
+
+def call_document_orchestrator(document_bytes: bytes, filename: str, document_id: str = None) -> Dict[str, Any]:
+    """
+    Call the document orchestrator service
+    """
+    try:
+        import aiohttp
+        import asyncio
+        import base64
+        
+        async def _call_orchestrator():
+            orchestrator_url = os.environ.get('DOCUMENT_ORCHESTRATOR_URL', 'http://localhost:8080')
+            
+            payload = {
+                'document_bytes': base64.b64encode(document_bytes).decode(),
+                'filename': filename,
+                'document_id': document_id
+            }
+            
+            async with aiohttp.ClientSession() as client:
+                async with client.post(f"{orchestrator_url}/document-orchestrator", json=payload) as response:
+                    return await response.json()
+        
+        # Run async call
+        return asyncio.run(_call_orchestrator())
+        
+    except Exception as e:
+        logger.error(f"Failed to call document orchestrator: {e}")
+        return {
+            'success': False,
+            'error': f"Orchestrator call failed: {str(e)}"
         }
 
 def rag_process_document_from_bytes_crud(document_bytes: bytes, filename: str, document_id: str = None, namespace: str = None) -> Dict[str, Any]:
