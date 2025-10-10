@@ -355,10 +355,10 @@ jobs:
               ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }}"
               ;;
             "docling-unified")
-              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},PROCESSED_DOCUMENTS_BUCKET=${{ secrets.PROCESSED_DOCUMENTS_BUCKET }},CHUNKS_TABLE=${{ secrets.CHUNKS_TABLE }},PINECONE_UPSERT_FUNCTION=${{ secrets.PINECONE_UPSERT_FUNCTION }},NEO4J_WRITE_FUNCTION=${{ secrets.NEO4J_WRITE_FUNCTION }}"
+              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},PROCESSED_DOCUMENTS_BUCKET=${{ secrets.PROCESSED_DOCUMENTS_BUCKET }},CHUNKS_TABLE=${{ secrets.CHUNKS_TABLE }}"
               ;;
             "agent-query")
-              ENV_VARS="PINECONE_UNIFIED_FUNCTION=${{ secrets.PINECONE_UNIFIED_FUNCTION }},NEO4J_UNIFIED_FUNCTION=${{ secrets.NEO4J_UNIFIED_FUNCTION }},DYNAMODB_READ_FUNCTION=${{ secrets.DYNAMODB_READ_FUNCTION }},S3_UNIFIED_FUNCTION=${{ secrets.S3_UNIFIED_FUNCTION }}"
+              ENV_VARS=""
               ;;
             "pinecone-unified")
               ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},PINECONE_HOST=${{ secrets.PINECONE_HOST }},PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},PINECONE_ENVIRONMENT=${{ secrets.PINECONE_ENVIRONMENT }},PINECONE_METRIC=${{ secrets.PINECONE_METRIC }}"
@@ -377,11 +377,23 @@ jobs:
               ;;
           esac
           
+          # Filter out empty environment variables
+          if [ -n "$ENV_VARS" ]; then
+            # Remove empty values (KEY=,)
+            FILTERED_ENV_VARS=$(echo "$ENV_VARS" | sed 's/[^,]*=,//g' | sed 's/,$//')
+            if [ -n "$FILTERED_ENV_VARS" ]; then
+              ENV_VARS="$FILTERED_ENV_VARS"
+            else
+              ENV_VARS=""
+            fi
+          fi
+          
           # Update function configuration with retry logic
           echo "🔄 Updating function configuration..."
           for attempt in 1 2 3 4 5; do
             echo "Attempt $attempt of 5"
             if [ -n "$ENV_VARS" ]; then
+              echo "Environment variables: $ENV_VARS"
               if aws lambda update-function-configuration \
                 --function-name knowledgebot-${{ matrix.name }} \
                 --memory-size ${{ matrix.memory }} \
@@ -392,6 +404,7 @@ jobs:
                 break
               fi
             else
+              echo "No environment variables to set"
               if aws lambda update-function-configuration \
                 --function-name knowledgebot-${{ matrix.name }} \
                 --memory-size ${{ matrix.memory }} \
@@ -420,10 +433,10 @@ jobs:
               ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }}"
               ;;
             "docling-unified")
-              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},PROCESSED_DOCUMENTS_BUCKET=${{ secrets.PROCESSED_DOCUMENTS_BUCKET }},CHUNKS_TABLE=${{ secrets.CHUNKS_TABLE }},PINECONE_UPSERT_FUNCTION=${{ secrets.PINECONE_UPSERT_FUNCTION }},NEO4J_WRITE_FUNCTION=${{ secrets.NEO4J_WRITE_FUNCTION }}"
+              ENV_VARS="DOCUMENTS_BUCKET=${{ secrets.DOCUMENTS_BUCKET }},PROCESSED_DOCUMENTS_BUCKET=${{ secrets.PROCESSED_DOCUMENTS_BUCKET }},CHUNKS_TABLE=${{ secrets.CHUNKS_TABLE }}"
               ;;
             "agent-query")
-              ENV_VARS="PINECONE_UNIFIED_FUNCTION=${{ secrets.PINECONE_UNIFIED_FUNCTION }},NEO4J_UNIFIED_FUNCTION=${{ secrets.NEO4J_UNIFIED_FUNCTION }},DYNAMODB_READ_FUNCTION=${{ secrets.DYNAMODB_READ_FUNCTION }},S3_UNIFIED_FUNCTION=${{ secrets.S3_UNIFIED_FUNCTION }}"
+              ENV_VARS=""
               ;;
             "pinecone-unified")
               ENV_VARS="PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }},PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }},PINECONE_HOST=${{ secrets.PINECONE_HOST }},PINECONE_DIMENSIONS=${{ secrets.PINECONE_DIMENSIONS }},PINECONE_ENVIRONMENT=${{ secrets.PINECONE_ENVIRONMENT }},PINECONE_METRIC=${{ secrets.PINECONE_METRIC }}"
@@ -444,6 +457,7 @@ jobs:
           
           # Create new function
           if [ -n "$ENV_VARS" ]; then
+            echo "Creating function with environment variables: $ENV_VARS"
             aws lambda create-function \
               --function-name knowledgebot-${{ matrix.name }} \
               --package-type Image \
@@ -454,6 +468,7 @@ jobs:
               --environment Variables="{$ENV_VARS}" \
               --region $AWS_REGION
           else
+            echo "Creating function without environment variables"
             aws lambda create-function \
               --function-name knowledgebot-${{ matrix.name }} \
               --package-type Image \
