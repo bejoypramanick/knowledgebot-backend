@@ -44,6 +44,42 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    - name: Clean up GitHub Actions cache and artifacts
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "🧹 Cleaning up GitHub Actions cache and artifacts..."
+        
+        # Clean up GitHub Actions cache (older than 7 days)
+        gh cache list --limit 1000 | while read line; do
+          cache_id=$(echo "$line" | awk '{print $1}')
+          cache_key=$(echo "$line" | awk '{print $2}')
+          
+          # Check if cache is older than 7 days
+          if [ -n "$cache_id" ] && [ "$cache_id" != "ID" ]; then
+            echo "Deleting cache: $cache_key (ID: $cache_id)"
+            gh cache delete "$cache_id" || echo "Failed to delete cache $cache_id"
+          fi
+        done
+        
+        # Clean up artifacts (older than 7 days)
+        gh api repos/:owner/:repo/actions/artifacts --jq '.artifacts[] | select(.created_at | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime < (now - 604800)) | .id' | while read artifact_id; do
+          if [ -n "$artifact_id" ]; then
+            echo "Deleting artifact: $artifact_id"
+            gh api -X DELETE "repos/:owner/:repo/actions/artifacts/$artifact_id" || echo "Failed to delete artifact $artifact_id"
+          fi
+        done
+        
+        # Clean up workflow runs (keep only last 10)
+        gh run list --limit 50 --json databaseId,status,conclusion | jq -r '.[] | select(.status == "completed" and .conclusion == "success") | .databaseId' | tail -n +11 | while read run_id; do
+          if [ -n "$run_id" ]; then
+            echo "Deleting workflow run: $run_id"
+            gh run delete "$run_id" || echo "Failed to delete run $run_id"
+          fi
+        done
+        
+        echo "✅ GitHub Actions cleanup completed"
+
     - name: Clean up old ECR images
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -527,7 +563,8 @@ jobs:
         echo "  • Single unified docling image"
         echo "  • Intelligent agent query handling"
         echo "  • Complete processing pipeline"
-        echo "  • GitHub Actions cleanup integration"
+        echo "  • GitHub Actions cleanup integration (cache, artifacts, runs)"
+        echo "  • ECR image cleanup (keeps last 5 images)"
         echo "  • Streamlined deployment process"
         echo ""
         echo "📊 Total Architecture:"
