@@ -344,18 +344,102 @@ def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]
         
         # Handle RAG search results (even if some services failed)
         if not rag_results.get('success'):
-            logger.warning("⚠️ RAG search failed completely, using fallback response")
-            return {
-                "success": True,
-                "response": f"I received your message: '{query}'. I'm having trouble accessing the knowledge base right now, but I can see your message is working correctly! Please try again in a moment.",
-                "sources": [],
-                "conversation_id": f"fallback_{int(time.time())}",
-                "metadata": {
-                    "rag_success": False,
-                    "services_available": rag_results.get('services_available', {}),
-                    "error": rag_results.get('error', 'Unknown error')
+            logger.warning("⚠️ RAG search failed completely, falling back to direct OpenAI chat")
+            
+            # Try to get a direct response from OpenAI without RAG context
+            try:
+                # Prepare messages for direct OpenAI chat
+                messages = []
+                if conversation_history:
+                    for msg in conversation_history:
+                        messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+                
+                # Add current query with context about RAG unavailability
+                messages.append({
+                    "role": "user", 
+                    "content": f"{query}\n\nNote: I'm currently unable to access my knowledge base, so I'll answer based on my general knowledge."
+                })
+                
+                # Call OpenAI directly
+                logger.info("🤖 Calling OpenAI directly as RAG fallback")
+                openai_response = call_openai_library(messages)
+                
+                return {
+                    "success": True,
+                    "response": openai_response,
+                    "sources": [],
+                    "conversation_id": f"fallback_{int(time.time())}",
+                    "metadata": {
+                        "rag_success": False,
+                        "fallback_mode": "direct_openai",
+                        "services_available": rag_results.get('services_available', {}),
+                        "error": rag_results.get('error', 'Unknown error')
+                    }
                 }
-            }
+                
+            except Exception as e:
+                logger.error(f"❌ Even OpenAI fallback failed: {e}")
+                return {
+                    "success": True,
+                    "response": f"I received your message: '{query}'. I'm having trouble accessing both my knowledge base and AI services right now, but I can see your message is working correctly! Please try again in a moment.",
+                    "sources": [],
+                    "conversation_id": f"fallback_{int(time.time())}",
+                    "metadata": {
+                        "rag_success": False,
+                        "fallback_mode": "error_message",
+                        "services_available": rag_results.get('services_available', {}),
+                        "error": f"RAG failed: {rag_results.get('error', 'Unknown error')}, OpenAI failed: {str(e)}"
+                    }
+                }
+        
+        # Check if we have enough RAG results, if not, supplement with direct OpenAI
+        total_rag_results = rag_results.get('total_results', 0)
+        if total_rag_results < 2:  # If we have very few results, supplement with direct chat
+            logger.info(f"⚠️ RAG returned only {total_rag_results} results, supplementing with direct OpenAI chat")
+            
+            # Prepare messages for direct OpenAI chat with limited RAG context
+            messages = []
+            if conversation_history:
+                for msg in conversation_history:
+                    messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+            
+            # Add context about limited knowledge base access
+            context_note = "Note: I have limited access to my knowledge base right now, so I'll provide a general answer supplemented with any available information."
+            messages.append({
+                "role": "user", 
+                "content": f"{query}\n\n{context_note}"
+            })
+            
+            try:
+                # Get direct OpenAI response
+                logger.info("🤖 Calling OpenAI to supplement limited RAG results")
+                openai_response = call_openai_library(messages)
+                
+                # Combine RAG results with OpenAI response
+                rag_context = ""
+                if total_rag_results > 0:
+                    rag_context = "\n\nBased on my limited knowledge base access, here's what I found:\n"
+                    for result in rag_results.get('vector_results', []):
+                        rag_context += f"- {result.get('metadata', {}).get('text', '')[:200]}...\n"
+                
+                combined_response = f"{openai_response}{rag_context}"
+                
+                return {
+                    "success": True,
+                    "response": combined_response,
+                    "sources": [],  # Could be enhanced to include RAG sources
+                    "conversation_id": f"hybrid_{int(time.time())}",
+                    "metadata": {
+                        "rag_success": True,
+                        "fallback_mode": "hybrid_openai_rag",
+                        "rag_results_count": total_rag_results,
+                        "services_available": rag_results.get('services_available', {})
+                    }
+                }
+                
+            except Exception as e:
+                logger.warning(f"⚠️ OpenAI supplement failed: {e}, continuing with limited RAG results")
+                # Continue with normal RAG processing
         
         # Step 2: Prepare context from RAG results
         logger.info("📝 Step 2: Preparing context from RAG results")
