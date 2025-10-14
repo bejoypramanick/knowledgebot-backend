@@ -3,10 +3,11 @@ FROM public.ecr.aws/lambda/python:3.11
 # Copy requirements for library installations
 COPY requirements-sentence-transformer-library.txt ${LAMBDA_TASK_ROOT}/
 
-# Install heavy dependencies with pre-compiled wheels
-# Use PyTorch CPU index for better compatibility
-RUN pip install --no-cache-dir --only-binary=all \
+# Install dependencies - let pip handle dependencies naturally
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
+    --find-links https://download.pytorch.org/whl/torch_stable.html \
     -r requirements-sentence-transformer-library.txt
 
 # Copy the library handler
