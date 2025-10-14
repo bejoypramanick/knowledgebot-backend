@@ -1,5 +1,5 @@
 # Requirements for Sentence Transformer Library Handler
-# Simplified for Lambda Docker environment
+# Using newer versions with prebuilt wheels (no Rust compilation needed)
 
 # Use PyTorch CPU version from PyTorch index
 torch==2.0.1+cpu
@@ -8,11 +8,15 @@ torch==2.0.1+cpu
 numpy>=1.24.0,<1.25.0
 scipy>=1.10.0,<1.11.0
 
-# Use older versions with better wheel support
-transformers==4.20.1
-sentence-transformers==2.2.2
+# Use newer versions with better prebuilt wheel support
+transformers>=4.30.0,<4.35.0
+sentence-transformers>=2.2.2,<2.3.0
 
-# Note: tokenizers and sentencepiece are installed separately in Dockerfile
+# Tokenizers with prebuilt wheels (≥ 0.13.3 has manylinux wheels)
+tokenizers>=0.13.3,<0.15.0
+
+# SentencePiece with prebuilt wheels
+sentencepiece>=0.1.99,<0.2.0
 
 # Common dependencies
 boto3>=1.26.0
