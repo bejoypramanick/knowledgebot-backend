@@ -13,6 +13,7 @@ import boto3
 import traceback
 import sys
 import asyncio
+import signal
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -37,6 +38,17 @@ if not logger.handlers:
 lambda_client = boto3.client('lambda')
 dynamodb = boto3.resource('dynamodb')
 apigateway = boto3.client('apigatewaymanagementapi')
+
+# Timeout configuration
+LAMBDA_TIMEOUT = 25  # Leave 5 seconds buffer for Lambda timeout
+
+class TimeoutError(Exception):
+    """Custom timeout exception"""
+    pass
+
+def timeout_handler(signum, frame):
+    """Handle timeout signal"""
+    raise TimeoutError("Operation timed out")
 
 def send_websocket_message(connection_id: str, message: Dict[str, Any], endpoint_url: str) -> bool:
     """Send message to WebSocket connection"""
@@ -378,6 +390,10 @@ def lambda_handler(event, context):
     logger.info("=== WEBSOCKET CHAT ORCHESTRATOR STARTED ===")
     logger.info(f"📊 Event: {json.dumps(event, default=str, indent=2)}")
     
+    # Set up timeout handler
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(LAMBDA_TIMEOUT)
+    
     try:
         # Extract WebSocket information
         connection_id = event.get('requestContext', {}).get('connectionId')
@@ -401,7 +417,7 @@ def lambda_handler(event, context):
             logger.info("🔌 WebSocket connection closed")
             return {"statusCode": 200, "body": "Disconnected"}
         
-        elif route_key == "message":
+        elif route_key in ["message", "$default"]:
             # Handle chat message
             try:
                 body = json.loads(event.get('body', '{}'))
@@ -448,6 +464,16 @@ def lambda_handler(event, context):
                     logger.error("❌ Failed to send WebSocket message")
                     return {"statusCode": 500, "body": "Failed to send message"}
                 
+            except TimeoutError:
+                logger.warning("⏰ Message processing timed out")
+                error_message = {
+                    "type": "error",
+                    "message": "Request timed out. Please try again with a simpler question.",
+                    "timestamp": datetime.now().isoformat()
+                }
+                send_websocket_message(connection_id, error_message, endpoint_url)
+                return {"statusCode": 200, "body": "Message processing timed out"}
+                
             except Exception as e:
                 logger.error(f"❌ Error processing WebSocket message: {e}")
                 error_message = {
@@ -462,7 +488,16 @@ def lambda_handler(event, context):
             logger.warning(f"⚠️ Unknown route key: {route_key}")
             return {"statusCode": 400, "body": "Unknown route"}
         
+    except TimeoutError:
+        signal.alarm(0)  # Cancel timeout
+        logger.warning("⏰ WebSocket operation timed out")
+        return {"statusCode": 200, "body": "Operation timed out"}
+        
     except Exception as e:
+        signal.alarm(0)  # Cancel timeout
         logger.error(f"💥 CRITICAL ERROR in WebSocket handler: {e}")
         logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         return {"statusCode": 500, "body": "Internal server error"}
+    
+    finally:
+        signal.alarm(0)  # Ensure timeout is cancelled

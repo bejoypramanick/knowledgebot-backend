@@ -30,7 +30,7 @@ Resources:
     Properties:
       Name: KnowledgeBot-WebSocket-API
       ProtocolType: WEBSOCKET
-      RouteSelectionExpression: $request.body.action
+      RouteSelectionExpression: "message"
       Description: Real-time chat API for KnowledgeBot
 
   # WebSocket Routes
@@ -53,6 +53,13 @@ Resources:
     Properties:
       ApiId: !Ref WebSocketApi
       RouteKey: message
+      Target: !Sub integrations/${MessageIntegration}
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $default
       Target: !Sub integrations/${MessageIntegration}
 
   # WebSocket Integrations
