@@ -1,0 +1,167 @@
+# WebSocket API Gateway Deployment Configuration
+# This file contains the CloudFormation/SAM template for WebSocket API
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'KnowledgeBot WebSocket API for Real-time Chat'
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.11
+    Environment:
+      Variables:
+        SENTENCE_TRANSFORMER_LIBRARY_FUNCTION: !Ref SentenceTransformerFunction
+        OPENAI_LIBRARY_FUNCTION: !Ref OpenAIFunction
+        PINECONE_LIBRARY_FUNCTION: !Ref PineconeFunction
+        NEO4J_LIBRARY_FUNCTION: !Ref Neo4jFunction
+
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+    Description: Stage name for the API
+
+Resources:
+  # WebSocket API Gateway
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: KnowledgeBot-WebSocket-API
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+      Description: Real-time chat API for KnowledgeBot
+
+  # WebSocket Routes
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $connect
+      Target: !Sub integrations/${ConnectIntegration}
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $disconnect
+      Target: !Sub integrations/${DisconnectIntegration}
+
+  MessageRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: message
+      Target: !Sub integrations/${MessageIntegration}
+
+  # WebSocket Integrations
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatOrchestratorFunction.Arn}/invocations
+
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatOrchestratorFunction.Arn}/invocations
+
+  MessageIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatOrchestratorFunction.Arn}/invocations
+
+  # WebSocket Stage
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WebSocketApi
+      StageName: !Ref StageName
+      AutoDeploy: true
+
+  # Lambda Functions
+  ChatOrchestratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: chat-orchestrator-websocket
+      CodeUri: microservices/
+      Handler: chat-orchestrator-websocket.lambda_handler
+      Description: WebSocket handler for real-time chat
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          SENTENCE_TRANSFORMER_LIBRARY_FUNCTION: !Ref SentenceTransformerFunction
+          OPENAI_LIBRARY_FUNCTION: !Ref OpenAIFunction
+          PINECONE_LIBRARY_FUNCTION: !Ref PineconeFunction
+          NEO4J_LIBRARY_FUNCTION: !Ref Neo4jFunction
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - apigateway:*
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - dynamodb:*
+              Resource: '*'
+
+  # Reference to existing library functions
+  SentenceTransformerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sentence-transformer-library-handler
+
+  OpenAIFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: openai-library-handler
+
+  PineconeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: pinecone-library-handler
+
+  Neo4jFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: neo4j-library-handler
+
+  # Lambda Permissions
+  WebSocketApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ChatOrchestratorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*/*
+
+Outputs:
+  WebSocketApiUrl:
+    Description: WebSocket API URL
+    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+    Export:
+      Name: !Sub ${AWS::StackName}-WebSocketApiUrl
+
+  WebSocketApiId:
+    Description: WebSocket API ID
+    Value: !Ref WebSocketApi
+    Export:
+      Name: !Sub ${AWS::StackName}-WebSocketApiId
+
+  ChatOrchestratorFunctionArn:
+    Description: Chat Orchestrator Function ARN
+    Value: !GetAtt ChatOrchestratorFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ChatOrchestratorFunctionArn

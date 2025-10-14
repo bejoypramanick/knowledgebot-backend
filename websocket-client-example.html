@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KnowledgeBot WebSocket Chat</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .chat-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafafa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .bot-message {
+            background: #e9ecef;
+            color: #333;
+            margin-right: auto;
+        }
+        
+        .typing-message {
+            background: #fff3cd;
+            color: #856404;
+            font-style: italic;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .chat-input {
+            display: flex;
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #eee;
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 16px;
+        }
+        
+        .chat-input button {
+            margin-left: 10px;
+            padding: 12px 25px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .chat-input button:hover {
+            background: #0056b3;
+        }
+        
+        .chat-input button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 10px 20px;
+            background: #d4edda;
+            color: #155724;
+            border-bottom: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border-bottom-color: #f5c6cb;
+        }
+        
+        .metadata {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            padding: 5px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🤖 KnowledgeBot WebSocket Chat</h1>
+            <p>Real-time chat with your knowledge base</p>
+        </div>
+        
+        <div id="status" class="status">
+            Connecting to WebSocket...
+        </div>
+        
+        <div id="chatMessages" class="chat-messages">
+            <div class="message bot-message">
+                <div>Welcome to KnowledgeBot! I'm your AI assistant with access to your knowledge base. Ask me anything!</div>
+                <div class="metadata">Connected via WebSocket - No timeout limits!</div>
+            </div>
+        </div>
+        
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Type your message here..." disabled>
+            <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket configuration
+        const WEBSOCKET_URL = 'wss://YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com/prod';
+        
+        let websocket = null;
+        let conversationHistory = [];
+        let isConnected = false;
+        
+        // DOM elements
+        const statusDiv = document.getElementById('status');
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        
+        // Initialize WebSocket connection
+        function initWebSocket() {
+            try {
+                websocket = new WebSocket(WEBSOCKET_URL);
+                
+                websocket.onopen = function(event) {
+                    console.log('WebSocket connected');
+                    isConnected = true;
+                    updateStatus('Connected to KnowledgeBot', false);
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    messageInput.focus();
+                };
+                
+                websocket.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                };
+                
+                websocket.onclose = function(event) {
+                    console.log('WebSocket disconnected');
+                    isConnected = false;
+                    updateStatus('Disconnected from KnowledgeBot', true);
+                    messageInput.disabled = true;
+                    sendButton.disabled = true;
+                    
+                    // Attempt to reconnect after 3 seconds
+                    setTimeout(initWebSocket, 3000);
+                };
+                
+                websocket.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    updateStatus('Connection error. Retrying...', true);
+                };
+                
+            } catch (error) {
+                console.error('Failed to initialize WebSocket:', error);
+                updateStatus('Failed to connect. Please check the WebSocket URL.', true);
+            }
+        }
+        
+        // Handle incoming WebSocket messages
+        function handleWebSocketMessage(data) {
+            console.log('Received message:', data);
+            
+            switch (data.type) {
+                case 'typing':
+                    showTypingMessage(data.message);
+                    break;
+                    
+                case 'response':
+                    hideTypingMessage();
+                    showBotMessage(data.message, data.metadata);
+                    break;
+                    
+                case 'error':
+                    hideTypingMessage();
+                    showErrorMessage(data.message);
+                    break;
+                    
+                default:
+                    console.log('Unknown message type:', data.type);
+            }
+        }
+        
+        // Send message via WebSocket
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !isConnected) return;
+            
+            // Add user message to chat
+            showUserMessage(message);
+            
+            // Add to conversation history
+            conversationHistory.push({
+                role: 'user',
+                content: message,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Send via WebSocket
+            const payload = {
+                action: 'message',
+                query: message,
+                conversation_history: conversationHistory
+            };
+            
+            websocket.send(JSON.stringify(payload));
+            
+            // Clear input
+            messageInput.value = '';
+        }
+        
+        // Show user message in chat
+        function showUserMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user-message';
+            messageDiv.innerHTML = `
+                <div>${escapeHtml(message)}</div>
+                <div class="metadata">You • ${new Date().toLocaleTimeString()}</div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Show bot message in chat
+        function showBotMessage(message, metadata = {}) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot-message';
+            
+            let metadataHtml = '';
+            if (metadata) {
+                const fallbackMode = metadata.fallback_mode || 'normal';
+                const ragSuccess = metadata.rag_success;
+                const servicesAvailable = metadata.services_available || {};
+                
+                metadataHtml = `
+                    <div class="metadata">
+                        Mode: ${fallbackMode} | 
+                        RAG: ${ragSuccess ? '✅' : '❌'} | 
+                        Services: ${Object.keys(servicesAvailable).filter(k => servicesAvailable[k]).join(', ')} | 
+                        ${new Date().toLocaleTimeString()}
+                    </div>
+                `;
+            }
+            
+            messageDiv.innerHTML = `
+                <div>${escapeHtml(message)}</div>
+                ${metadataHtml}
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+            
+            // Add to conversation history
+            conversationHistory.push({
+                role: 'assistant',
+                content: message,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // Show typing indicator
+        function showTypingMessage(message) {
+            // Remove existing typing message
+            hideTypingMessage();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message typing-message';
+            messageDiv.id = 'typing-message';
+            messageDiv.innerHTML = `
+                <div>${escapeHtml(message)}</div>
+                <div class="metadata">Bot is thinking...</div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Hide typing indicator
+        function hideTypingMessage() {
+            const typingMessage = document.getElementById('typing-message');
+            if (typingMessage) {
+                typingMessage.remove();
+            }
+        }
+        
+        // Show error message
+        function showErrorMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message error-message';
+            messageDiv.innerHTML = `
+                <div>❌ ${escapeHtml(message)}</div>
+                <div class="metadata">Error • ${new Date().toLocaleTimeString()}</div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Update status
+        function updateStatus(message, isError = false) {
+            statusDiv.textContent = message;
+            statusDiv.className = isError ? 'status disconnected' : 'status';
+        }
+        
+        // Scroll to bottom of chat
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Handle Enter key
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // Initialize WebSocket on page load
+        window.addEventListener('load', function() {
+            initWebSocket();
+        });
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            if (websocket) {
+                websocket.close();
+            }
+        });
+    </script>
+</body>
+</html>
