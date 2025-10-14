@@ -9,7 +9,7 @@ echo "🚀 Starting WebSocket API deployment..."
 
 # Configuration
 STACK_NAME="knowledgebot-websocket"
-REGION="us-east-1"
+REGION="ap-south-1"
 STAGE="prod"
 
 # Colors for output
@@ -112,7 +112,7 @@ if [ -n "$WEBSOCKET_URL" ]; then
     # Update the client example with the actual URL
     if [ -f "websocket-client-example.html" ]; then
         print_status "Updating client example with WebSocket URL..."
-        sed -i.bak "s|wss://YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com/prod|$WEBSOCKET_URL|g" websocket-client-example.html
+        sed -i.bak "s|wss://YOUR_API_GATEWAY_ID.execute-api.ap-south-1.amazonaws.com/prod|$WEBSOCKET_URL|g" websocket-client-example.html
         rm websocket-client-example.html.bak
         print_success "Client example updated"
     fi
