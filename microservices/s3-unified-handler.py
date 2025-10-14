@@ -1,14 +1,29 @@
 import json
 import boto3
 import logging
+import traceback
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
 import os
 
-# Configure logging
-logger = logging.getLogger()
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Add handler to ensure logs are captured
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 # Initialize AWS clients
 s3_client = boto3.client('s3')
@@ -212,10 +227,13 @@ def delete_file(bucket: str, key: str) -> Dict[str, Any]:
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main Lambda handler for S3 operations - BUSINESS LOGIC"""
+    logger.info("=== S3 UNIFIED HANDLER STARTED ===")
+    logger.info(f"📊 Event type: {type(event)}")
+    logger.info(f"📊 Event keys: {list(event.keys()) if isinstance(event, dict) else 'Not a dict'}")
+    logger.info(f"📊 Context: {context}")
+    logger.info(f"📊 Event details: {json.dumps(event, default=str, indent=2)}")
+    
     try:
-        logger.info("🚀 S3 Unified Handler started")
-        logger.info(f"📋 Event: {json.dumps(event, default=str)}")
-        
         # Extract HTTP method and path
         http_method = event.get('httpMethod', 'GET')
         path = event.get('path', '')
@@ -223,6 +241,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         query_parameters = event.get('queryStringParameters') or {}
         
         logger.info(f"🔍 HTTP Method: {http_method}, Path: {path}")
+        logger.info(f"📊 Path parameters: {path_parameters}")
+        logger.info(f"📊 Query parameters: {query_parameters}")
         
         # Route based on HTTP method and path
         if http_method == 'POST' and '/upload/presigned-url' in path:
@@ -269,12 +289,45 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 })
             }
             
-    except Exception as e:
-        logger.error(f"❌ Error in S3 handler: {e}")
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON decode error in S3 handler: {e}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         return {
-            "statusCode": 500,
+            "statusCode": 400,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
             "body": json.dumps({
                 "success": False,
-                "error": str(e)
+                "error": f"Invalid JSON in request: {e}",
+                "error_type": "JSONDecodeError",
+                "timestamp": datetime.now().isoformat()
+            })
+        }
+    except Exception as e:
+        logger.error(f"❌ CRITICAL ERROR in S3 handler: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Error args: {e.args}")
+        logger.error(f"📊 Full stack trace: {traceback.format_exc()}")
+        logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
+        
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
+            "body": json.dumps({
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.now().isoformat()
             })
         }

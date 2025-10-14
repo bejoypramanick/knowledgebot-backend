@@ -11,12 +11,27 @@ import logging
 import time
 import hashlib
 import boto3
+import traceback
+import sys
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-# Configure logging
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Add handler to ensure logs are captured
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 # Initialize AWS clients
 lambda_client = boto3.client('lambda')
@@ -26,6 +41,8 @@ def call_sentence_transformer_library(texts: List[str]) -> List[List[float]]:
     """Call Sentence Transformer library Lambda for query embeddings"""
     try:
         logger.info(f"🔧 Calling Sentence Transformer library for query embedding")
+        logger.info(f"📝 Input texts count: {len(texts)}")
+        logger.info(f"📝 Input texts preview: {texts[:2] if len(texts) > 2 else texts}")
         
         payload = {
             'texts': texts
@@ -33,29 +50,49 @@ def call_sentence_transformer_library(texts: List[str]) -> List[List[float]]:
         
         # Get Sentence Transformer library function name from environment
         st_function_name = os.environ.get('SENTENCE_TRANSFORMER_LIBRARY_FUNCTION', 'sentence-transformer-library-handler')
+        logger.info(f"🎯 Target function: {st_function_name}")
         
+        logger.info(f"📤 Invoking Lambda function with payload size: {len(json.dumps(payload))} bytes")
         response = lambda_client.invoke(
             FunctionName=st_function_name,
             InvocationType='RequestResponse',
             Payload=json.dumps(payload)
         )
         
+        logger.info(f"📥 Received response with status code: {response.get('StatusCode')}")
+        logger.info(f"📥 Response metadata: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
+        
         result = json.loads(response['Payload'].read())
+        logger.info(f"📊 Parsed result keys: {list(result.keys())}")
+        logger.info(f"📊 Result status code: {result.get('statusCode')}")
         
         if result.get('statusCode') == 200:
             st_result = json.loads(result['body'])
+            logger.info(f"📊 ST result keys: {list(st_result.keys())}")
+            logger.info(f"📊 ST success status: {st_result.get('success')}")
+            
             if st_result.get('success'):
-                logger.info(f"✅ Sentence Transformer library generated query embedding")
-                return st_result['embeddings'][0]  # Return first (and only) embedding
+                embeddings = st_result.get('embeddings', [])
+                logger.info(f"✅ Sentence Transformer library generated {len(embeddings)} embeddings")
+                logger.info(f"📊 Embedding dimensions: {len(embeddings[0]) if embeddings else 'N/A'}")
+                return embeddings[0]  # Return first (and only) embedding
             else:
-                logger.error(f"❌ Sentence Transformer library failed: {st_result.get('error')}")
-                raise Exception(f"Sentence Transformer failed: {st_result.get('error')}")
+                error_msg = st_result.get('error', 'Unknown error')
+                logger.error(f"❌ Sentence Transformer library failed: {error_msg}")
+                logger.error(f"📊 Full ST result: {st_result}")
+                raise Exception(f"Sentence Transformer failed: {error_msg}")
         else:
             logger.error(f"❌ Sentence Transformer library Lambda call failed: {result}")
+            logger.error(f"📊 Full Lambda response: {result}")
             raise Exception(f"Sentence Transformer Lambda call failed: {result}")
             
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON decode error in Sentence Transformer response: {e}")
+        logger.error(f"📊 Raw response: {response.get('Payload', {}).read() if 'response' in locals() else 'No response'}")
+        raise Exception(f"Invalid JSON response from Sentence Transformer: {e}")
     except Exception as e:
         logger.error(f"❌ Error calling Sentence Transformer library: {e}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         raise
 
 def call_pinecone_library(query_vector: List[float], limit: int = 10, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
@@ -365,7 +402,10 @@ Instructions:
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main Lambda handler for chat orchestration - BUSINESS LOGIC"""
     logger.info("=== CHAT ORCHESTRATOR BUSINESS LOGIC STARTED ===")
-    logger.info(f"Event: {json.dumps(event, default=str)}")
+    logger.info(f"📊 Event type: {type(event)}")
+    logger.info(f"📊 Event keys: {list(event.keys()) if isinstance(event, dict) else 'Not a dict'}")
+    logger.info(f"📊 Context: {context}")
+    logger.info(f"📊 Event details: {json.dumps(event, default=str, indent=2)}")
     
     try:
         # Handle CORS preflight request
@@ -482,7 +522,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"💥 Error in chat orchestrator business logic: {e}")
+        logger.error(f"💥 CRITICAL ERROR in chat orchestrator business logic: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Error args: {e.args}")
+        logger.error(f"📊 Full stack trace: {traceback.format_exc()}")
+        logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
+        
         return {
             "statusCode": 500,
             "headers": {
@@ -494,6 +539,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             },
             "body": json.dumps({
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.now().isoformat()
             })
         }

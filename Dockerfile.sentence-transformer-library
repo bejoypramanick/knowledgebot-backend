@@ -1,6 +1,11 @@
 # Use prebuilt wheels approach - no Rust compilation needed
 FROM public.ecr.aws/lambda/python:3.11
 
+# Set cache directories to writable locations during build
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/huggingface
+ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers
+
 # Copy requirements and install using prebuilt wheels
 COPY requirements-sentence-transformer-library.txt ${LAMBDA_TASK_ROOT}/
 
@@ -10,6 +15,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     --find-links https://download.pytorch.org/whl/torch_stable.html \
     -r requirements-sentence-transformer-library.txt
+
+# Pre-download the model during build time to avoid runtime downloads
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/tmp/sentence_transformers_cache')"
 
 # Copy the library handler
 COPY microservices/sentence-transformer-library-handler.py ${LAMBDA_TASK_ROOT}/

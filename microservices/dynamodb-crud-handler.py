@@ -6,12 +6,29 @@ Performs CRUD operations on DynamoDB
 
 import json
 import os
+import traceback
+import sys
 from typing import Dict, Any, List
+from datetime import datetime
 import boto3
 import logging
 
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Add handler to ensure logs are captured
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 # Initialize DynamoDB
 dynamodb = boto3.resource('dynamodb')
@@ -19,6 +36,10 @@ dynamodb = boto3.resource('dynamodb')
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Perform DynamoDB CRUD operations"""
     logger.info("=== DYNAMODB CRUD STARTED ===")
+    logger.info(f"📊 Event type: {type(event)}")
+    logger.info(f"📊 Event keys: {list(event.keys()) if isinstance(event, dict) else 'Not a dict'}")
+    logger.info(f"📊 Context: {context}")
+    logger.info(f"📊 Event details: {json.dumps(event, default=str, indent=2)}")
     
     try:
         # Parse request body
@@ -133,10 +154,45 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": json.dumps({"error": f"Unsupported operation: {operation}"})
             }
         
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON decode error in DynamoDB CRUD: {e}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        return {
+            "statusCode": 400,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
+            "body": json.dumps({
+                "success": False,
+                "error": f"Invalid JSON in request: {e}",
+                "error_type": "JSONDecodeError",
+                "timestamp": datetime.now().isoformat()
+            })
+        }
     except Exception as e:
-        logger.error(f"Error in DynamoDB CRUD: {e}")
+        logger.error(f"❌ CRITICAL ERROR in DynamoDB CRUD: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Error args: {e.args}")
+        logger.error(f"📊 Full stack trace: {traceback.format_exc()}")
+        logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
+        
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": str(e)})
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
+            "body": json.dumps({
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.now().isoformat()
+            })
         }

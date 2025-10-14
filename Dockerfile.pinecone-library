@@ -1,11 +1,18 @@
 FROM public.ecr.aws/lambda/python:3.11
 
+# Set cache directories to writable locations during build
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/huggingface
+
 # Copy requirements for library installations
 COPY requirements-pinecone-library.txt ${LAMBDA_TASK_ROOT}/
 
 # Install heavy dependencies with pre-compiled wheels
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-pinecone-library.txt
+
+# Pre-initialize Pinecone client during build time to cache any required downloads
+RUN python -c "import pinecone; print('Pinecone library imported successfully')"
 
 # Copy the library handler
 COPY microservices/pinecone-library-handler.py ${LAMBDA_TASK_ROOT}/

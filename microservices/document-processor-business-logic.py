@@ -13,13 +13,28 @@ import boto3
 import uuid
 import hashlib
 import time
+import traceback
+import sys
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from datetime import datetime
 
-# Configure logging
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Add handler to ensure logs are captured
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 # Initialize AWS clients
 s3_client = boto3.client('s3')
@@ -30,12 +45,30 @@ def download_from_s3(bucket: str, key: str) -> bytes:
     """Download file from S3"""
     try:
         logger.info(f"📥 Downloading document from S3: s3://{bucket}/{key}")
+        logger.info(f"📊 Bucket: {bucket}")
+        logger.info(f"📊 Key: {key}")
+        
         response = s3_client.get_object(Bucket=bucket, Key=key)
+        logger.info(f"📊 S3 response metadata: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
+        logger.info(f"📊 Content length: {response.get('ContentLength', 'Unknown')}")
+        logger.info(f"📊 Content type: {response.get('ContentType', 'Unknown')}")
+        
         document_bytes = response['Body'].read()
         logger.info(f"✅ Successfully downloaded {len(document_bytes)} bytes from S3")
         return document_bytes
+        
+    except s3_client.exceptions.NoSuchKey as e:
+        logger.error(f"❌ S3 object not found: s3://{bucket}/{key}")
+        logger.error(f"📊 Error details: {e}")
+        raise Exception(f"S3 object not found: s3://{bucket}/{key}")
+    except s3_client.exceptions.NoSuchBucket as e:
+        logger.error(f"❌ S3 bucket not found: {bucket}")
+        logger.error(f"📊 Error details: {e}")
+        raise Exception(f"S3 bucket not found: {bucket}")
     except Exception as e:
         logger.error(f"❌ Failed to download from S3: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         raise
 
 def upload_to_s3(bucket: str, key: str, data: bytes) -> str:

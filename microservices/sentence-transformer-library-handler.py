@@ -7,10 +7,27 @@ All business logic happens in Zip Lambdas
 
 import json
 import logging
+import traceback
+import sys
+import os
+from datetime import datetime
 
-# Configure logging
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Add handler to ensure logs are captured
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 # Initialize Sentence Transformer - THIS IS THE ONLY PURPOSE OF THIS DOCKER LAMBDA
 try:
@@ -36,40 +53,80 @@ except Exception as e:
 def lambda_handler(event, context):
     """Sentence Transformer Library Handler - ONLY library imports and initialization"""
     logger.info("=== SENTENCE TRANSFORMER LIBRARY HANDLER STARTED ===")
+    logger.info(f"📊 Event type: {type(event)}")
+    logger.info(f"📊 Event keys: {list(event.keys()) if isinstance(event, dict) else 'Not a dict'}")
+    logger.info(f"📊 Context: {context}")
+    logger.info(f"📊 Event details: {json.dumps(event, default=str, indent=2)}")
     
     try:
         if SENTENCE_TRANSFORMER_COMPONENTS is None:
+            logger.error("❌ Sentence Transformer components not available - initialization failed")
             return {
                 "statusCode": 500,
                 "body": json.dumps({
                     "success": False,
-                    "error": "Sentence Transformer library not available"
+                    "error": "Sentence Transformer library not available - initialization failed during container startup"
                 })
             }
         
+        logger.info(f"✅ Sentence Transformer components available: {list(SENTENCE_TRANSFORMER_COMPONENTS.keys())}")
+        
         # Parse the request
+        logger.info(f"📊 Parsing request body...")
         if isinstance(event.get('body'), str):
-            body = json.loads(event['body'])
+            try:
+                body = json.loads(event['body'])
+                logger.info(f"✅ Successfully parsed JSON body")
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ JSON decode error: {e}")
+                logger.error(f"📊 Raw body: {event.get('body')}")
+                raise Exception(f"Invalid JSON in request body: {e}")
         else:
             body = event.get('body', {})
+            logger.info(f"✅ Using direct body object")
+        
+        logger.info(f"📊 Parsed body keys: {list(body.keys()) if isinstance(body, dict) else 'Not a dict'}")
         
         # Check if this is an embedding request
         if 'texts' in body:
             texts = body['texts']
-            logger.info(f"Generating embeddings for {len(texts)} texts")
+            logger.info(f"🔧 Processing embedding request for {len(texts)} texts")
+            logger.info(f"📝 Text preview: {texts[:2] if len(texts) > 2 else texts}")
             
-            # Generate embeddings using the loaded model
-            embeddings = SENTENCE_TRANSFORMER_COMPONENTS['embedding_model'].encode(texts)
+            if not isinstance(texts, list):
+                logger.error(f"❌ 'texts' must be a list, got: {type(texts)}")
+                raise Exception(f"'texts' must be a list, got {type(texts)}")
             
-            return {
-                "statusCode": 200,
-                "body": json.dumps({
-                    "success": True,
-                    "embeddings": embeddings.tolist()  # Convert numpy array to list
-                })
-            }
+            if len(texts) == 0:
+                logger.error(f"❌ 'texts' list is empty")
+                raise Exception("'texts' list cannot be empty")
+            
+            logger.info(f"🧠 Generating embeddings using model...")
+            try:
+                # Generate embeddings using the loaded model
+                embeddings = SENTENCE_TRANSFORMER_COMPONENTS['embedding_model'].encode(texts)
+                logger.info(f"✅ Successfully generated embeddings")
+                logger.info(f"📊 Embeddings shape: {embeddings.shape if hasattr(embeddings, 'shape') else len(embeddings)}")
+                logger.info(f"📊 Embeddings type: {type(embeddings)}")
+                
+                # Convert numpy array to list
+                embeddings_list = embeddings.tolist()
+                logger.info(f"✅ Converted embeddings to list format")
+                
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps({
+                        "success": True,
+                        "embeddings": embeddings_list
+                    })
+                }
+            except Exception as e:
+                logger.error(f"❌ Error generating embeddings: {e}")
+                logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+                raise Exception(f"Failed to generate embeddings: {e}")
         else:
             # Return success - library is loaded and ready
+            logger.info(f"📊 No 'texts' field found, returning library status")
             return {
                 "statusCode": 200,
                 "body": json.dumps({
@@ -79,12 +136,30 @@ def lambda_handler(event, context):
                 })
             }
         
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON decode error in Sentence Transformer handler: {e}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        return {
+            "statusCode": 400,
+            "body": json.dumps({
+                "success": False,
+                "error": f"Invalid JSON in request: {e}",
+                "error_type": "JSONDecodeError"
+            })
+        }
     except Exception as e:
-        logger.error(f"Error in Sentence Transformer library handler: {e}")
+        logger.error(f"❌ Error in Sentence Transformer library handler: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Error args: {e.args}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
+        
         return {
             "statusCode": 500,
             "body": json.dumps({
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.now().isoformat()
             })
         }
