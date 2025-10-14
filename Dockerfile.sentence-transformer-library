@@ -1,15 +1,24 @@
 # Multi-stage build to handle complex dependencies
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
-# Install build dependencies
+# Install build dependencies including OpenSSL
 RUN apt-get update && \
-    apt-get install -y gcc g++ make cmake pkg-config curl && \
+    apt-get install -y gcc g++ make cmake pkg-config curl \
+    libssl-dev libffi-dev libbz2-dev libreadline-dev \
+    libsqlite3-dev libncurses5-dev libncursesw5-dev \
+    xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev \
+    liblzma-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Rust for tokenizers
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Set OpenSSL environment variables
+ENV OPENSSL_DIR=/usr
+ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
+ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
 
 # Copy requirements and install
 COPY requirements-sentence-transformer-library.txt /tmp/
