@@ -1,8 +1,8 @@
 # Requirements for Pinecone Library Handler
 # Optimized for Lambda Docker environment
 
-# Pinecone client
-pinecone-client>=3.0.0
+# Pinecone client (updated package name)
+pinecone>=5.0.0
 
 # Common dependencies
 boto3>=1.26.0
