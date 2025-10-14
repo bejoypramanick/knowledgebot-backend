@@ -19,6 +19,10 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 from datetime import datetime
 
+# Import error logging utility
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from error_logger import log_error, log_custom_error, log_timeout_error, log_service_failure
+
 # Configure logging with more detailed format
 logging.basicConfig(
     level=logging.INFO,
@@ -487,6 +491,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"💥 Error in document processor business logic: {e}")
+        
+        # Log error to centralized system
+        log_error(
+            'document-processor-business-logic',
+            e,
+            context,
+            {
+                'operation_type': event.get('operation_type', 'unknown'),
+                'event_keys': list(event.keys()) if event else [],
+                'function_name': 'document-processor-business-logic'
+            },
+            'CRITICAL'
+        )
+        
         return {
             "statusCode": 500,
             "headers": {

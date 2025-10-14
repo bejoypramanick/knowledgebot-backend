@@ -13,6 +13,10 @@ from datetime import datetime
 import boto3
 import logging
 
+# Import error logging utility
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from error_logger import log_error, log_custom_error, log_service_failure
+
 # Configure logging with more detailed format
 logging.basicConfig(
     level=logging.INFO,
@@ -179,6 +183,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error(f"📊 Error args: {e.args}")
         logger.error(f"📊 Full stack trace: {traceback.format_exc()}")
         logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
+        
+        # Log error to centralized system
+        log_error(
+            'dynamodb-crud-handler',
+            e,
+            context,
+            {
+                'operation_type': event.get('operation_type', 'unknown'),
+                'event_keys': list(event.keys()) if event else [],
+                'function_name': 'dynamodb-crud-handler'
+            },
+            'CRITICAL'
+        )
         
         return {
             "statusCode": 500,

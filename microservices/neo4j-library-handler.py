@@ -8,6 +8,13 @@ All business logic happens in Zip Lambdas
 import json
 import os
 import logging
+import traceback
+import sys
+from datetime import datetime
+
+# Import error logging utility
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from error_logger import log_error, log_custom_error, log_service_failure
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -62,6 +69,20 @@ def lambda_handler(event, context):
         
     except Exception as e:
         logger.error(f"Error in Neo4j library handler: {e}")
+        
+        # Log error to centralized system
+        log_error(
+            'neo4j-library-handler',
+            e,
+            context,
+            {
+                'operation_type': event.get('operation_type', 'unknown'),
+                'event_keys': list(event.keys()) if event else [],
+                'function_name': 'neo4j-library-handler'
+            },
+            'ERROR'
+        )
+        
         return {
             "statusCode": 500,
             "body": json.dumps({

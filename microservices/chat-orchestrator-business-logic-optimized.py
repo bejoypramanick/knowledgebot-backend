@@ -16,6 +16,10 @@ import signal
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+# Import error logging utility
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from error_logger import log_error, log_custom_error, log_timeout_error, log_service_failure
+
 # Configure logging with more detailed format
 logging.basicConfig(
     level=logging.INFO,
@@ -320,6 +324,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"💥 CRITICAL ERROR in optimized chat orchestrator: {e}")
         logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        
+        # Log error to centralized system
+        log_error(
+            'chat-orchestrator-business-logic-optimized',
+            e,
+            context,
+            {
+                'query': event.get('body', {}).get('query', '') if isinstance(event.get('body'), dict) else '',
+                'event_keys': list(event.keys()) if event else [],
+                'function_name': 'chat-orchestrator-business-logic-optimized'
+            },
+            'CRITICAL'
+        )
         
         return {
             "statusCode": 500,

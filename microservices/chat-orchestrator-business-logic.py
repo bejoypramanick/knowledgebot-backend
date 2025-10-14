@@ -16,6 +16,10 @@ import sys
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+# Import error logging utility
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from error_logger import log_error, log_custom_error, log_timeout_error, log_service_failure
+
 # Configure logging with more detailed format
 logging.basicConfig(
     level=logging.INFO,
@@ -91,10 +95,19 @@ def call_sentence_transformer_library(texts: List[str]) -> List[List[float]]:
         logger.error(f"❌ JSON decode error in Sentence Transformer response: {e}")
         logger.error(f"📊 Raw response: {response.get('Payload', {}).read() if 'response' in locals() else 'No response'}")
         raise Exception(f"Invalid JSON response from Sentence Transformer: {e}")
-    except Exception as e:
-        logger.error(f"❌ Error calling Sentence Transformer library: {e}")
-        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
-        raise
+        except Exception as e:
+            logger.error(f"❌ Error calling Sentence Transformer library: {e}")
+            logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+            
+            # Log service failure
+            log_service_failure(
+                'chat-orchestrator-business-logic',
+                'sentence-transformer-library',
+                str(e),
+                None,
+                {'query': query[:100] if query else ''}
+            )
+            raise
 
 def call_pinecone_library(query_vector: List[float], limit: int = 10, filter_dict: Dict[str, Any] = None, namespace: str = None) -> Dict[str, Any]:
     """Call Pinecone library Lambda for vector search"""
@@ -671,6 +684,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error(f"📊 Error args: {e.args}")
         logger.error(f"📊 Full stack trace: {traceback.format_exc()}")
         logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
+        
+        # Log error to centralized system
+        log_error(
+            'chat-orchestrator-business-logic',
+            e,
+            context,
+            {
+                'query': event.get('body', {}).get('query', '') if isinstance(event.get('body'), dict) else '',
+                'event_keys': list(event.keys()) if event else [],
+                'function_name': 'chat-orchestrator-business-logic'
+            },
+            'CRITICAL'
+        )
         
         return {
             "statusCode": 500,
