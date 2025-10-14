@@ -4,7 +4,10 @@ FROM public.ecr.aws/lambda/python:3.11
 COPY requirements-sentence-transformer-library.txt ${LAMBDA_TASK_ROOT}/
 
 # Install heavy dependencies with pre-compiled wheels
-RUN pip install --no-cache-dir --only-binary=all -r requirements-sentence-transformer-library.txt
+# Use PyTorch CPU index for better compatibility
+RUN pip install --no-cache-dir --only-binary=all \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements-sentence-transformer-library.txt
 
 # Copy the library handler
 COPY microservices/sentence-transformer-library-handler.py ${LAMBDA_TASK_ROOT}/
