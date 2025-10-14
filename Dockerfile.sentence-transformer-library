@@ -1,9 +1,15 @@
 FROM public.ecr.aws/lambda/python:3.11
 
+# Install minimal build dependencies for sentencepiece
+RUN yum update -y && \
+    yum install -y gcc gcc-c++ make cmake pkgconfig && \
+    yum clean all && \
+    rm -rf /var/cache/yum
+
 # Copy requirements for library installations
 COPY requirements-sentence-transformer-library.txt ${LAMBDA_TASK_ROOT}/
 
-# Install dependencies - let pip handle dependencies naturally
+# Install dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
