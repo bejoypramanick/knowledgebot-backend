@@ -32,18 +32,48 @@ if not logger.handlers:
 # Initialize Sentence Transformer - THIS IS THE ONLY PURPOSE OF THIS DOCKER LAMBDA
 try:
     import os
+    import time
+    
     # Set cache directory to PERSISTENT locations in the image filesystem
     os.environ['TRANSFORMERS_CACHE'] = '/opt/models/transformers_cache'
     os.environ['HF_HOME'] = '/opt/models/huggingface'
     os.environ['SENTENCE_TRANSFORMERS_CACHE'] = '/opt/models/sentence_transformers_cache'
     
+    # Disable progress bars and verbose logging for Lambda
+    os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
+    os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
+    
+    logger.info("🔄 Starting Sentence Transformer initialization...")
+    start_time = time.time()
+    
     from sentence_transformers import SentenceTransformer
+    
+    # Check if cache directory exists and has content
+    cache_dir = '/opt/models/sentence_transformers_cache'
+    if os.path.exists(cache_dir):
+        cache_files = os.listdir(cache_dir)
+        logger.info(f"📁 Cache directory exists with {len(cache_files)} files")
+        logger.info(f"📁 Cache files: {cache_files[:5]}...")  # Show first 5 files
+    else:
+        logger.warning(f"⚠️ Cache directory {cache_dir} does not exist!")
     
     # Load the pre-downloaded model from PERSISTENT cache (should be cached from Docker build)
     logger.info("🔄 Loading pre-downloaded model from persistent cache...")
-    embedding_model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/opt/models/sentence_transformers_cache')
+    model_start = time.time()
+    
+    embedding_model = SentenceTransformer(
+        'all-MiniLM-L6-v2', 
+        cache_folder='/opt/models/sentence_transformers_cache',
+        device='cpu'  # Force CPU usage
+    )
+    
+    model_load_time = time.time() - model_start
+    total_time = time.time() - start_time
+    
     logger.info("✅ Sentence Transformer library imported and initialized successfully")
-    logger.info("✅ Model loaded from persistent cache - no downloads needed")
+    logger.info(f"✅ Model loaded from persistent cache in {model_load_time:.2f}s (total: {total_time:.2f}s)")
+    logger.info(f"✅ Model device: {embedding_model.device}")
+    logger.info(f"✅ Model max sequence length: {embedding_model.max_seq_length}")
     
     # Export the initialized components for use by Zip Lambdas
     SENTENCE_TRANSFORMER_COMPONENTS = {
@@ -54,6 +84,9 @@ try:
 except Exception as e:
     logger.error(f"❌ Failed to initialize Sentence Transformer library: {e}")
     logger.error(f"📊 Error details: {str(e)}")
+    logger.error(f"📊 Error type: {type(e).__name__}")
+    import traceback
+    logger.error(f"📊 Stack trace: {traceback.format_exc()}")
     SENTENCE_TRANSFORMER_COMPONENTS = None
 
 def lambda_handler(event, context):

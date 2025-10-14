@@ -56,7 +56,8 @@ def call_sentence_transformer_library(texts: List[str]) -> List[List[float]]:
         response = lambda_client.invoke(
             FunctionName=st_function_name,
             InvocationType='RequestResponse',
-            Payload=json.dumps(payload)
+            Payload=json.dumps(payload),
+            LogType='Tail'  # Get execution logs
         )
         
         logger.info(f"📥 Received response with status code: {response.get('StatusCode')}")
@@ -238,51 +239,98 @@ def search_dynamodb_chunks(query: str, limit: int = 10) -> List[Dict[str, Any]]:
         return []
 
 def perform_rag_search(query: str, limit: int = 5) -> Dict[str, Any]:
-    """Perform RAG search using vector similarity and graph relations - BUSINESS LOGIC"""
+    """Perform RAG search using vector similarity and graph relations - BUSINESS LOGIC with fallbacks"""
     try:
         logger.info(f"🔍 Starting RAG search for query: {query[:50]}...")
         
-        # Step 1: Generate query embedding
-        logger.info("🧠 Step 1: Generating query embedding")
-        query_embedding = call_sentence_transformer_library([query])
+        # Initialize results with empty defaults
+        query_embedding = None
+        pinecone_result = {"results": []}
+        neo4j_result = {"records": []}
+        dynamodb_chunks = []
         
-        # Step 2: Search Pinecone for similar chunks
-        logger.info("🔍 Step 2: Searching Pinecone for similar chunks")
-        pinecone_result = call_pinecone_library(query_embedding, limit)
+        # Step 1: Generate query embedding (with fallback)
+        try:
+            logger.info("🧠 Step 1: Generating query embedding")
+            query_embedding = call_sentence_transformer_library([query])
+            logger.info("✅ Query embedding generated successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Sentence Transformer failed: {e}, continuing without embeddings")
+            query_embedding = None
         
-        # Step 3: Search Neo4j for related documents
-        logger.info("🕸️ Step 3: Searching Neo4j for related documents")
-        neo4j_query = """
-        MATCH (d:Document)-[:CONTAINS]->(c:Chunk)
-        WHERE c.text CONTAINS $query
-        RETURN d.id as document_id, d.filename, c.text as chunk_text, c.type as chunk_type
-        LIMIT $limit
-        """
-        neo4j_result = call_neo4j_library(neo4j_query, {'query': query, 'limit': limit})
+        # Step 2: Search Pinecone for similar chunks (with fallback)
+        try:
+            if query_embedding:
+                logger.info("🔍 Step 2: Searching Pinecone for similar chunks")
+                pinecone_result = call_pinecone_library(query_embedding, limit)
+                logger.info(f"✅ Pinecone search completed: {len(pinecone_result.get('results', []))} results")
+            else:
+                logger.warning("⚠️ Skipping Pinecone search - no embeddings available")
+        except Exception as e:
+            logger.warning(f"⚠️ Pinecone search failed: {e}, continuing without vector results")
+            pinecone_result = {"results": []}
         
-        # Step 4: Search DynamoDB for additional context
-        logger.info("💾 Step 4: Searching DynamoDB for additional context")
-        dynamodb_chunks = search_dynamodb_chunks(query, limit)
+        # Step 3: Search Neo4j for related documents (with fallback)
+        try:
+            logger.info("🕸️ Step 3: Searching Neo4j for related documents")
+            neo4j_query = """
+            MATCH (d:Document)-[:CONTAINS]->(c:Chunk)
+            WHERE c.text CONTAINS $query
+            RETURN d.id as document_id, d.filename, c.text as chunk_text, c.type as chunk_type
+            LIMIT $limit
+            """
+            neo4j_result = call_neo4j_library(neo4j_query, {'query': query, 'limit': limit})
+            logger.info(f"✅ Neo4j search completed: {len(neo4j_result.get('records', []))} results")
+        except Exception as e:
+            logger.warning(f"⚠️ Neo4j search failed: {e}, continuing without graph results")
+            neo4j_result = {"records": []}
+        
+        # Step 4: Search DynamoDB for additional context (with fallback)
+        try:
+            logger.info("💾 Step 4: Searching DynamoDB for additional context")
+            dynamodb_chunks = search_dynamodb_chunks(query, limit)
+            logger.info(f"✅ DynamoDB search completed: {len(dynamodb_chunks)} results")
+        except Exception as e:
+            logger.warning(f"⚠️ DynamoDB search failed: {e}, continuing without DynamoDB results")
+            dynamodb_chunks = []
         
         # Combine results
+        total_results = len(pinecone_result.get('results', [])) + len(neo4j_result.get('records', [])) + len(dynamodb_chunks)
+        
         rag_results = {
             "success": True,
             "query": query,
             "vector_results": pinecone_result.get('results', []),
             "graph_results": neo4j_result.get('records', []),
             "dynamodb_results": dynamodb_chunks,
-            "total_results": len(pinecone_result.get('results', [])) + len(neo4j_result.get('records', [])) + len(dynamodb_chunks)
+            "total_results": total_results,
+            "embeddings_used": query_embedding is not None,
+            "services_available": {
+                "sentence_transformer": query_embedding is not None,
+                "pinecone": len(pinecone_result.get('results', [])) > 0,
+                "neo4j": len(neo4j_result.get('records', [])) > 0,
+                "dynamodb": len(dynamodb_chunks) > 0
+            }
         }
         
-        logger.info(f"✅ RAG search completed: {rag_results['total_results']} total results")
+        logger.info(f"✅ RAG search completed: {total_results} total results")
+        logger.info(f"📊 Services status: {rag_results['services_available']}")
         return rag_results
         
     except Exception as e:
-        logger.error(f"❌ Error in RAG search: {e}")
+        logger.error(f"❌ RAG search failed completely: {e}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         return {
             "success": False,
             "error": str(e),
-            "query": query
+            "response": "I apologize, but I encountered an error while processing your request. The search services are temporarily unavailable.",
+            "total_results": 0,
+            "services_available": {
+                "sentence_transformer": False,
+                "pinecone": False,
+                "neo4j": False,
+                "dynamodb": False
+            }
         }
 
 def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -294,8 +342,20 @@ def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]
         logger.info("🔍 Step 1: Performing RAG search")
         rag_results = perform_rag_search(query, limit=5)
         
+        # Handle RAG search results (even if some services failed)
         if not rag_results.get('success'):
-            raise Exception("RAG search failed")
+            logger.warning("⚠️ RAG search failed completely, using fallback response")
+            return {
+                "success": True,
+                "response": f"I received your message: '{query}'. I'm having trouble accessing the knowledge base right now, but I can see your message is working correctly! Please try again in a moment.",
+                "sources": [],
+                "conversation_id": f"fallback_{int(time.time())}",
+                "metadata": {
+                    "rag_success": False,
+                    "services_available": rag_results.get('services_available', {}),
+                    "error": rag_results.get('error', 'Unknown error')
+                }
+            }
         
         # Step 2: Prepare context from RAG results
         logger.info("📝 Step 2: Preparing context from RAG results")
