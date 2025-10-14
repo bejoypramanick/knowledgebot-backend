@@ -4,7 +4,8 @@ FROM public.ecr.aws/lambda/python:3.11
 COPY requirements-pinecone-library.txt ${LAMBDA_TASK_ROOT}/
 
 # Install heavy dependencies with pre-compiled wheels
-RUN pip install --no-cache-dir --only-binary=all -r requirements-pinecone-library.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-pinecone-library.txt
 
 # Copy the library handler
 COPY microservices/pinecone-library-handler.py ${LAMBDA_TASK_ROOT}/

@@ -3,8 +3,9 @@ FROM public.ecr.aws/lambda/python:3.11
 # Copy requirements for library installations
 COPY requirements-docling-library.txt ${LAMBDA_TASK_ROOT}/
 
-# Install heavy dependencies with pre-compiled wheels
-RUN pip install --no-cache-dir --only-binary=all -r requirements-docling-library.txt
+# Install dependencies - let pip handle dependencies naturally
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-docling-library.txt
 
 # Copy the library handler
 COPY microservices/docling-library-handler.py ${LAMBDA_TASK_ROOT}/
