@@ -10,24 +10,26 @@ env:
   ECR_REPOSITORY: knowledgebot-lambdas
 
 jobs:
-  deploy-docker-lambdas:
+  build-docker-images:
     runs-on: ubuntu-latest
     environment: chatbot
+    strategy:
+      matrix:
+        include:
+          - handler: docling-library
+            function: docling-library-handler
+          - handler: pinecone-library
+            function: pinecone-library-handler
+          - handler: neo4j-library
+            function: neo4j-library-handler
+          - handler: openai-library
+            function: openai-library-handler
+          - handler: sentence-transformer-library
+            function: sentence-transformer-library-handler
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Debug AWS Configuration
-      run: |
-        echo "🔍 Debugging AWS Configuration..."
-        echo "AWS_REGION: ${{ secrets.AWS_REGION }}"
-        echo "AWS_ACCESS_KEY_ID length: ${#AWS_ACCESS_KEY_ID}"
-        echo "AWS_SECRET_ACCESS_KEY length: ${#AWS_SECRET_ACCESS_KEY}"
-        echo "ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}"
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -40,76 +42,54 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build and push Docker images
+    - name: Build and push Docker image
       run: |
         # Get account ID
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
         
-        # Library handlers to build
-        declare -a LIBRARY_HANDLERS=(
-          "docling-library"
-          "pinecone-library" 
-          "neo4j-library"
-          "openai-library"
-          "sentence-transformer-library"
-        )
+        echo "🏗️ Building ${{ matrix.handler }}..."
         
-        for handler in "${LIBRARY_HANDLERS[@]}"; do
-          echo "Building and pushing $handler..."
-          
-          # Build image
-          docker build -f Dockerfile.$handler -t $handler .
-          
-          # Tag for ECR
-          docker tag $handler:latest $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$handler-latest
-          
-          # Push to ECR
-          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$handler-latest
-          
-          echo "✅ $handler pushed successfully"
-        done
+        # Build image
+        docker build -f Dockerfile.${{ matrix.handler }} -t ${{ matrix.handler }} .
+        
+        # Tag for ECR
+        docker tag ${{ matrix.handler }}:latest $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ matrix.handler }}-latest
+        
+        # Push to ECR
+        docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ matrix.handler }}-latest
+        
+        echo "✅ ${{ matrix.handler }} pushed successfully"
 
-    - name: Deploy Lambda functions
+    - name: Deploy Lambda function
       run: |
         # Get account ID
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
         
-        # Library handlers to deploy
-        declare -a LIBRARY_HANDLERS=(
-          "docling-library-handler"
-          "pinecone-library-handler" 
-          "neo4j-library-handler"
-          "openai-library-handler"
-          "sentence-transformer-library-handler"
-        )
+        echo "🚀 Deploying ${{ matrix.function }}..."
         
-        for handler in "${LIBRARY_HANDLERS[@]}"; do
-          echo "Deploying Lambda function: $handler"
-          
-          # Check if function exists
-          if aws lambda get-function --function-name $handler --region $AWS_REGION >/dev/null 2>&1; then
-            # Update existing function
-            aws lambda update-function-code \
-              --function-name $handler \
-              --image-uri $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${handler%-handler}-library-latest \
-              --region $AWS_REGION
-            echo "✅ $handler updated successfully"
-          else
-            # Create new function
-            aws lambda create-function \
-              --function-name $handler \
-              --package-type Image \
-              --code ImageUri=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${handler%-handler}-library-latest \
-              --role arn:aws:iam::$ACCOUNT_ID:role/lambda-execution-role \
-              --timeout 900 \
-              --memory-size 3008 \
-              --region $AWS_REGION
-            echo "✅ $handler created successfully"
-          fi
-        done
+        # Check if function exists
+        if aws lambda get-function --function-name ${{ matrix.function }} --region $AWS_REGION >/dev/null 2>&1; then
+          # Update existing function
+          aws lambda update-function-code \
+            --function-name ${{ matrix.function }} \
+            --image-uri $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ matrix.handler }}-latest \
+            --region $AWS_REGION
+          echo "✅ ${{ matrix.function }} updated successfully"
+        else
+          # Create new function
+          aws lambda create-function \
+            --function-name ${{ matrix.function }} \
+            --package-type Image \
+            --code ImageUri=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ matrix.handler }}-latest \
+            --role arn:aws:iam::$ACCOUNT_ID:role/lambda-execution-role \
+            --timeout 900 \
+            --memory-size 3008 \
+            --region $AWS_REGION
+          echo "✅ ${{ matrix.function }} created successfully"
+        fi
 
   deploy-zip-lambdas:
-    needs: deploy-docker-lambdas
+    needs: build-docker-images
     runs-on: ubuntu-latest
     environment: chatbot
     
@@ -213,7 +193,7 @@ jobs:
         done
 
   summary:
-    needs: [deploy-docker-lambdas, deploy-zip-lambdas]
+    needs: [build-docker-images, deploy-zip-lambdas]
     runs-on: ubuntu-latest
     environment: chatbot
     if: always()
