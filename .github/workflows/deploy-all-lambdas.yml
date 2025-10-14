@@ -203,15 +203,18 @@ jobs:
         for handler in "${BUSINESS_HANDLERS[@]}"; do
           echo "Creating deployment package for $handler..."
           
+          # Store repository root path
+          REPO_ROOT=$(pwd)
+          
           # Create temporary directory
           TEMP_DIR=$(mktemp -d)
           cd $TEMP_DIR
           
-          # Copy handler file
-          cp ./microservices/$handler.py .
+          # Copy handler file from repository root
+          cp $REPO_ROOT/microservices/$handler.py .
           
           # Install minimal dependencies for business logic
-          pip install -r ./requirements-zip-lambdas.txt -t . --quiet
+          pip install -r $REPO_ROOT/requirements-zip-lambdas.txt -t . --quiet
           
           # Create zip package
           zip -r $handler.zip . >/dev/null
