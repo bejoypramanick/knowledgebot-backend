@@ -14,6 +14,12 @@ logger.setLevel(logging.INFO)
 
 # Initialize Docling components - THIS IS THE ONLY PURPOSE OF THIS DOCKER LAMBDA
 try:
+    import os
+    # Set cache directories to /tmp which is writable in Lambda
+    os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
+    os.environ['HF_HOME'] = '/tmp/huggingface'
+    os.environ['DOCLING_CACHE'] = '/tmp/docling_cache'
+    
     from docling.document_converter import DocumentConverter
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
