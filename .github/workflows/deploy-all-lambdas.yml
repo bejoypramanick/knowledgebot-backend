@@ -12,6 +12,7 @@ env:
 jobs:
   deploy-docker-lambdas:
     runs-on: ubuntu-latest
+    environment: chatbot
     
     steps:
     - name: Checkout code
@@ -110,6 +111,7 @@ jobs:
   deploy-zip-lambdas:
     needs: deploy-docker-lambdas
     runs-on: ubuntu-latest
+    environment: chatbot
     
     steps:
     - name: Checkout code
@@ -213,6 +215,7 @@ jobs:
   summary:
     needs: [deploy-docker-lambdas, deploy-zip-lambdas]
     runs-on: ubuntu-latest
+    environment: chatbot
     if: always()
     
     steps:

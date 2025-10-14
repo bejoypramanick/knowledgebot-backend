@@ -16,6 +16,7 @@ env:
 jobs:
   deploy-zip-lambdas:
     runs-on: ubuntu-latest
+    environment: chatbot
     
     steps:
     - name: Checkout code
