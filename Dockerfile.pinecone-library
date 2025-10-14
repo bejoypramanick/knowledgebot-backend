@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-pinecone-library.txt
 
 # Pre-initialize Pinecone client during build time to cache any required downloads
-RUN python -c "from pinecone import Pinecone; print('Pinecone library imported successfully')"
+RUN python -c "from pinecone import Pinecone; print('Pinecone library imported successfully'); print('Pinecone version:', Pinecone.__version__ if hasattr(Pinecone, '__version__') else 'Unknown')"
 
 # Copy the library handler
 COPY microservices/pinecone-library-handler.py ${LAMBDA_TASK_ROOT}/

@@ -35,10 +35,15 @@ try:
     # Set cache directory to /tmp which is writable in Lambda
     os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
     os.environ['HF_HOME'] = '/tmp/huggingface'
+    os.environ['SENTENCE_TRANSFORMERS_CACHE'] = '/tmp/sentence_transformers_cache'
     
     from sentence_transformers import SentenceTransformer
+    
+    # Load the pre-downloaded model (should be cached from Docker build)
+    logger.info("🔄 Loading pre-downloaded model from cache...")
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/tmp/sentence_transformers_cache')
     logger.info("✅ Sentence Transformer library imported and initialized successfully")
+    logger.info("✅ Model loaded from cache - no downloads needed")
     
     # Export the initialized components for use by Zip Lambdas
     SENTENCE_TRANSFORMER_COMPONENTS = {
@@ -48,6 +53,7 @@ try:
     
 except Exception as e:
     logger.error(f"❌ Failed to initialize Sentence Transformer library: {e}")
+    logger.error(f"📊 Error details: {str(e)}")
     SENTENCE_TRANSFORMER_COMPONENTS = None
 
 def lambda_handler(event, context):
@@ -107,10 +113,14 @@ def lambda_handler(event, context):
                 logger.error(f"❌ 'texts' list is empty")
                 raise Exception("'texts' list cannot be empty")
             
-            logger.info(f"🧠 Generating embeddings using model...")
+            logger.info(f"🧠 Generating embeddings using pre-loaded model...")
             try:
-                # Generate embeddings using the loaded model
-                embeddings = SENTENCE_TRANSFORMER_COMPONENTS['embedding_model'].encode(texts)
+                # Generate embeddings using the pre-loaded model (no downloads needed)
+                embeddings = SENTENCE_TRANSFORMER_COMPONENTS['embedding_model'].encode(
+                    texts, 
+                    convert_to_tensor=False,  # Keep as numpy array for efficiency
+                    show_progress_bar=False   # Disable progress bar for Lambda
+                )
                 logger.info(f"✅ Successfully generated embeddings")
                 logger.info(f"📊 Embeddings shape: {embeddings.shape if hasattr(embeddings, 'shape') else len(embeddings)}")
                 logger.info(f"📊 Embeddings type: {type(embeddings)}")

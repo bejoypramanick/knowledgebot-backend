@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-neo4j-library.txt
 
 # Pre-initialize Neo4j driver during build time to cache any required downloads
-RUN python -c "from neo4j import GraphDatabase; print('Neo4j library imported successfully')"
+RUN python -c "from neo4j import GraphDatabase; print('Neo4j library imported successfully'); print('Neo4j version:', GraphDatabase.__version__ if hasattr(GraphDatabase, '__version__') else 'Unknown')"
 
 # Copy the library handler
 COPY microservices/neo4j-library-handler.py ${LAMBDA_TASK_ROOT}/

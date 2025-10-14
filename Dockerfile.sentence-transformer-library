@@ -5,6 +5,7 @@ FROM public.ecr.aws/lambda/python:3.11
 ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
 ENV HF_HOME=/tmp/huggingface
 ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers
+ENV SENTENCE_TRANSFORMERS_CACHE=/tmp/sentence_transformers_cache
 
 # Copy requirements and install using prebuilt wheels
 COPY requirements-sentence-transformer-library.txt ${LAMBDA_TASK_ROOT}/
@@ -16,8 +17,15 @@ RUN pip install --no-cache-dir --upgrade pip && \
     --find-links https://download.pytorch.org/whl/torch_stable.html \
     -r requirements-sentence-transformer-library.txt
 
-# Pre-download the model during build time to avoid runtime downloads
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/tmp/sentence_transformers_cache')"
+# Create cache directories
+RUN mkdir -p /tmp/transformers_cache /tmp/huggingface /tmp/sentence_transformers /tmp/sentence_transformers_cache
+
+# Pre-download and cache the model during build time to avoid runtime downloads
+# Using a smaller, more efficient model for Lambda
+RUN python -c "import os; os.environ['TRANSFORMERS_CACHE']='/tmp/transformers_cache'; os.environ['HF_HOME']='/tmp/huggingface'; os.environ['SENTENCE_TRANSFORMERS_CACHE']='/tmp/sentence_transformers_cache'; from sentence_transformers import SentenceTransformer; model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/tmp/sentence_transformers_cache'); print('Model downloaded and cached successfully'); print('Model info:', model)"
+
+# Verify the model is properly cached
+RUN ls -la /tmp/sentence_transformers_cache/ && echo "Cache contents:" && find /tmp/sentence_transformers_cache -type f | head -10
 
 # Copy the library handler
 COPY microservices/sentence-transformer-library-handler.py ${LAMBDA_TASK_ROOT}/

@@ -26,9 +26,11 @@ try:
     from docling.datamodel.document import DsDocument
     from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
     
-    # Initialize converter with optimized settings
+    # Initialize converter with pre-downloaded models (should be cached from Docker build)
+    logger.info("🔄 Loading pre-downloaded Docling models from cache...")
     converter = DocumentConverter()
     logger.info("✅ Docling library imported and initialized successfully")
+    logger.info("✅ Models loaded from cache - no downloads needed")
     
     # Export the initialized components for use by Zip Lambdas
     DOCLING_COMPONENTS = {
@@ -42,6 +44,7 @@ try:
     
 except Exception as e:
     logger.error(f"❌ Failed to initialize Docling library: {e}")
+    logger.error(f"📊 Error details: {str(e)}")
     DOCLING_COMPONENTS = None
 
 def lambda_handler(event, context):

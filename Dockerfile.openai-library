@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-openai-library.txt
 
 # Pre-initialize OpenAI client during build time to cache any required downloads
-RUN python -c "import openai; print('OpenAI library imported successfully')"
+RUN python -c "import openai; print('OpenAI library imported successfully'); print('OpenAI version:', openai.__version__)"
 
 # Copy the library handler
 COPY microservices/openai-library-handler.py ${LAMBDA_TASK_ROOT}/

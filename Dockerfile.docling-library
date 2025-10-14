@@ -4,6 +4,7 @@ FROM public.ecr.aws/lambda/python:3.11
 ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
 ENV HF_HOME=/tmp/huggingface
 ENV DOCLING_CACHE_DIR=/tmp/docling_cache
+ENV DOCLING_CACHE=/tmp/docling_cache
 
 # Copy requirements for library installations
 COPY requirements-docling-library.txt ${LAMBDA_TASK_ROOT}/
@@ -12,8 +13,14 @@ COPY requirements-docling-library.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-docling-library.txt
 
-# Pre-download docling models during build time to avoid runtime downloads
-RUN python -c "from docling.document_converter import DocumentConverter; converter = DocumentConverter(); print('Docling models downloaded successfully')"
+# Create cache directories
+RUN mkdir -p /tmp/transformers_cache /tmp/huggingface /tmp/docling_cache
+
+# Pre-download and initialize docling models during build time to avoid runtime downloads
+RUN python -c "import os; os.environ['TRANSFORMERS_CACHE']='/tmp/transformers_cache'; os.environ['HF_HOME']='/tmp/huggingface'; os.environ['DOCLING_CACHE']='/tmp/docling_cache'; from docling.document_converter import DocumentConverter; converter = DocumentConverter(); print('Docling models downloaded and cached successfully')"
+
+# Verify the models are properly cached
+RUN ls -la /tmp/docling_cache/ && echo "Docling cache contents:" && find /tmp/docling_cache -type f | head -10
 
 # Copy the library handler
 COPY microservices/docling-library-handler.py ${LAMBDA_TASK_ROOT}/
