@@ -41,7 +41,13 @@ apigateway = boto3.client('apigatewaymanagementapi')
 def send_websocket_message(connection_id: str, message: Dict[str, Any], endpoint_url: str) -> bool:
     """Send message to WebSocket connection"""
     try:
-        apigateway.post_to_connection(
+        # Create a new API Gateway client with the correct endpoint
+        if endpoint_url:
+            apigateway_client = boto3.client('apigatewaymanagementapi', endpoint_url=endpoint_url)
+        else:
+            apigateway_client = apigateway
+            
+        apigateway_client.post_to_connection(
             ConnectionId=connection_id,
             Data=json.dumps(message)
         )
