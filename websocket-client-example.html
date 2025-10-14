@@ -61,6 +61,20 @@
             font-style: italic;
         }
         
+        .progress-message {
+            background: #d1ecf1;
+            color: #0c5460;
+            font-style: italic;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .acknowledgment-message {
+            background: #d4edda;
+            color: #155724;
+            font-style: italic;
+            border-left: 4px solid #28a745;
+        }
+        
         .error-message {
             background: #f8d7da;
             color: #721c24;
@@ -213,13 +227,25 @@
                     showTypingMessage(data.message);
                     break;
                     
+                case 'acknowledgment':
+                    showAcknowledgmentMessage(data.message);
+                    break;
+                    
+                case 'progress':
+                    showProgressMessage(data.message);
+                    break;
+                    
                 case 'response':
                     hideTypingMessage();
+                    hideAcknowledgmentMessage();
+                    hideProgressMessage();
                     showBotMessage(data.message, data.metadata);
                     break;
                     
                 case 'error':
                     hideTypingMessage();
+                    hideAcknowledgmentMessage();
+                    hideProgressMessage();
                     showErrorMessage(data.message);
                     break;
                     
@@ -324,6 +350,54 @@
             const typingMessage = document.getElementById('typing-message');
             if (typingMessage) {
                 typingMessage.remove();
+            }
+        }
+        
+        // Show progress message
+        function showProgressMessage(message) {
+            // Remove existing progress message
+            hideProgressMessage();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message progress-message';
+            messageDiv.id = 'progress-message';
+            messageDiv.innerHTML = `
+                <div>${escapeHtml(message)}</div>
+                <div class="metadata">Processing...</div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Hide progress message
+        function hideProgressMessage() {
+            const progressMessage = document.getElementById('progress-message');
+            if (progressMessage) {
+                progressMessage.remove();
+            }
+        }
+        
+        // Show acknowledgment message
+        function showAcknowledgmentMessage(message) {
+            // Remove existing acknowledgment message
+            hideAcknowledgmentMessage();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message acknowledgment-message';
+            messageDiv.id = 'acknowledgment-message';
+            messageDiv.innerHTML = `
+                <div>${escapeHtml(message)}</div>
+                <div class="metadata">Acknowledged</div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Hide acknowledgment message
+        function hideAcknowledgmentMessage() {
+            const acknowledgmentMessage = document.getElementById('acknowledgment-message');
+            if (acknowledgmentMessage) {
+                acknowledgmentMessage.remove();
             }
         }
         

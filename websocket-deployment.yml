@@ -7,8 +7,8 @@ Description: 'KnowledgeBot WebSocket API for Real-time Chat'
 
 Globals:
   Function:
-    Timeout: 30
-    MemorySize: 512
+    Timeout: 300  # 5 minutes - no artificial timeout, let services handle their own timeouts
+    MemorySize: 1024  # Increased memory for better performance
     Runtime: python3.11
     Environment:
       Variables:
@@ -69,6 +69,7 @@ Resources:
       ApiId: !Ref WebSocketApi
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatOrchestratorFunction.Arn}/invocations
+      TimeoutInMillis: 30000  # 30 seconds - maximum allowed by API Gateway
 
   DisconnectIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -76,6 +77,7 @@ Resources:
       ApiId: !Ref WebSocketApi
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatOrchestratorFunction.Arn}/invocations
+      TimeoutInMillis: 30000  # 30 seconds - maximum allowed by API Gateway
 
   MessageIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -83,6 +85,7 @@ Resources:
       ApiId: !Ref WebSocketApi
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatOrchestratorFunction.Arn}/invocations
+      TimeoutInMillis: 30000  # 30 seconds - maximum allowed by API Gateway
 
   # WebSocket Stage
   WebSocketStage:
