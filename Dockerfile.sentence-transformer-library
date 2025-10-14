@@ -1,20 +1,29 @@
-FROM public.ecr.aws/lambda/python:3.11
+# Multi-stage build to handle complex dependencies
+FROM python:3.11-slim as builder
 
-# Install minimal build dependencies for sentencepiece
-RUN yum update -y && \
-    yum install -y gcc gcc-c++ make cmake pkgconfig && \
-    yum clean all && \
-    rm -rf /var/cache/yum
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y gcc g++ make cmake pkg-config curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy requirements for library installations
-COPY requirements-sentence-transformer-library.txt ${LAMBDA_TASK_ROOT}/
+# Install Rust for tokenizers
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Install dependencies
+# Copy requirements and install
+COPY requirements-sentence-transformer-library.txt /tmp/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
-    --find-links https://download.pytorch.org/whl/torch_stable.html \
-    -r requirements-sentence-transformer-library.txt
+    -r /tmp/requirements-sentence-transformer-library.txt
+
+# Final stage - Lambda runtime
+FROM public.ecr.aws/lambda/python:3.11
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /var/lang/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /var/lang/bin/
 
 # Copy the library handler
 COPY microservices/sentence-transformer-library-handler.py ${LAMBDA_TASK_ROOT}/
