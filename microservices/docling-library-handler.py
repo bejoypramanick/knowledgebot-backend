@@ -15,10 +15,10 @@ logger.setLevel(logging.INFO)
 # Initialize Docling components - THIS IS THE ONLY PURPOSE OF THIS DOCKER LAMBDA
 try:
     import os
-    # Set cache directories to /tmp which is writable in Lambda
-    os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
-    os.environ['HF_HOME'] = '/tmp/huggingface'
-    os.environ['DOCLING_CACHE'] = '/tmp/docling_cache'
+    # Set cache directories to PERSISTENT locations in the image filesystem
+    os.environ['TRANSFORMERS_CACHE'] = '/opt/models/transformers_cache'
+    os.environ['HF_HOME'] = '/opt/models/huggingface'
+    os.environ['DOCLING_CACHE'] = '/opt/models/docling_cache'
     
     from docling.document_converter import DocumentConverter
     from docling.datamodel.base_models import InputFormat
@@ -26,11 +26,11 @@ try:
     from docling.datamodel.document import DsDocument
     from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
     
-    # Initialize converter with pre-downloaded models (should be cached from Docker build)
-    logger.info("🔄 Loading pre-downloaded Docling models from cache...")
+    # Initialize converter with pre-downloaded models from PERSISTENT cache (should be cached from Docker build)
+    logger.info("🔄 Loading pre-downloaded Docling models from persistent cache...")
     converter = DocumentConverter()
     logger.info("✅ Docling library imported and initialized successfully")
-    logger.info("✅ Models loaded from cache - no downloads needed")
+    logger.info("✅ Models loaded from persistent cache - no downloads needed")
     
     # Export the initialized components for use by Zip Lambdas
     DOCLING_COMPONENTS = {

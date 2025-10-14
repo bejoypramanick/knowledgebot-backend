@@ -32,18 +32,18 @@ if not logger.handlers:
 # Initialize Sentence Transformer - THIS IS THE ONLY PURPOSE OF THIS DOCKER LAMBDA
 try:
     import os
-    # Set cache directory to /tmp which is writable in Lambda
-    os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
-    os.environ['HF_HOME'] = '/tmp/huggingface'
-    os.environ['SENTENCE_TRANSFORMERS_CACHE'] = '/tmp/sentence_transformers_cache'
+    # Set cache directory to PERSISTENT locations in the image filesystem
+    os.environ['TRANSFORMERS_CACHE'] = '/opt/models/transformers_cache'
+    os.environ['HF_HOME'] = '/opt/models/huggingface'
+    os.environ['SENTENCE_TRANSFORMERS_CACHE'] = '/opt/models/sentence_transformers_cache'
     
     from sentence_transformers import SentenceTransformer
     
-    # Load the pre-downloaded model (should be cached from Docker build)
-    logger.info("🔄 Loading pre-downloaded model from cache...")
-    embedding_model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/tmp/sentence_transformers_cache')
+    # Load the pre-downloaded model from PERSISTENT cache (should be cached from Docker build)
+    logger.info("🔄 Loading pre-downloaded model from persistent cache...")
+    embedding_model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/opt/models/sentence_transformers_cache')
     logger.info("✅ Sentence Transformer library imported and initialized successfully")
-    logger.info("✅ Model loaded from cache - no downloads needed")
+    logger.info("✅ Model loaded from persistent cache - no downloads needed")
     
     # Export the initialized components for use by Zip Lambdas
     SENTENCE_TRANSFORMER_COMPONENTS = {
