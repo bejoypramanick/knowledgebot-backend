@@ -4,6 +4,16 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      deployment_type:
+        description: 'Choose deployment type'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+        - 'both'
+        - 'docker-only'
+        - 'zip-only'
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -13,6 +23,7 @@ jobs:
   build-docker-images:
     runs-on: ubuntu-latest
     environment: chatbot
+    if: ${{ github.event_name == 'push' || github.event.inputs.deployment_type == 'both' || github.event.inputs.deployment_type == 'docker-only' }}
     strategy:
       matrix:
         include:
@@ -167,9 +178,10 @@ jobs:
         fi
 
   deploy-zip-lambdas:
-    needs: build-docker-images
     runs-on: ubuntu-latest
     environment: chatbot
+    if: ${{ github.event_name == 'push' || github.event.inputs.deployment_type == 'both' || github.event.inputs.deployment_type == 'zip-only' }}
+    needs: ${{ github.event.inputs.deployment_type == 'zip-only' && '[]' || 'build-docker-images' }}
     
     steps:
     - name: Checkout code
@@ -208,10 +220,10 @@ jobs:
           cd $TEMP_DIR
           
           # Copy handler file
-          cp ../microservices/$handler.py .
+          cp ./microservices/$handler.py .
           
           # Install minimal dependencies for business logic
-          pip install -r ../requirements-zip-lambdas.txt -t . --quiet
+          pip install -r ./requirements-zip-lambdas.txt -t . --quiet
           
           # Create zip package
           zip -r $handler.zip . >/dev/null
@@ -274,7 +286,8 @@ jobs:
     needs: [build-docker-images, deploy-zip-lambdas]
     runs-on: ubuntu-latest
     environment: chatbot
-    if: always()
+    # Only run if at least one of the deployment jobs was triggered
+    if: ${{ always() && (needs.build-docker-images.result != 'skipped' || needs.deploy-zip-lambdas.result != 'skipped') }}
     
     steps:
     - name: Deployment Summary
@@ -282,19 +295,38 @@ jobs:
         echo "🎉 Lambda Deployment Summary"
         echo "================================"
         echo ""
-        echo "Docker Lambdas (Library Installations):"
-        echo "  ✅ docling-library-handler"
-        echo "  ✅ pinecone-library-handler"
-        echo "  ✅ neo4j-library-handler"
-        echo "  ✅ openai-library-handler"
-        echo "  ✅ sentence-transformer-library-handler"
+        
+        # Show deployment type
+        if [ "${{ github.event.inputs.deployment_type }}" == "docker-only" ]; then
+          echo "📦 Deployment Type: Docker Images Only"
+        elif [ "${{ github.event.inputs.deployment_type }}" == "zip-only" ]; then
+          echo "📦 Deployment Type: Zip Packages Only"
+        else
+          echo "📦 Deployment Type: Both Docker Images and Zip Packages"
+        fi
         echo ""
-        echo "Zip Lambdas (Business Logic - Viewable in AWS Console):"
-        echo "  ✅ document-processor-business-logic"
-        echo "  ✅ chat-orchestrator-business-logic"
-        echo "  ✅ dynamodb-crud-handler"
-        echo "  ✅ s3-unified-handler"
-        echo ""
+        
+        # Show Docker lambdas if they were deployed
+        if [ "${{ needs.build-docker-images.result }}" != "skipped" ]; then
+          echo "Docker Lambdas (Library Installations):"
+          echo "  ✅ docling-library-handler"
+          echo "  ✅ pinecone-library-handler"
+          echo "  ✅ neo4j-library-handler"
+          echo "  ✅ openai-library-handler"
+          echo "  ✅ sentence-transformer-library-handler"
+          echo ""
+        fi
+        
+        # Show Zip lambdas if they were deployed
+        if [ "${{ needs.deploy-zip-lambdas.result }}" != "skipped" ]; then
+          echo "Zip Lambdas (Business Logic - Viewable in AWS Console):"
+          echo "  ✅ document-processor-business-logic"
+          echo "  ✅ chat-orchestrator-business-logic"
+          echo "  ✅ dynamodb-crud-handler"
+          echo "  ✅ s3-unified-handler"
+          echo ""
+        fi
+        
         echo "💡 All business logic code is now viewable in AWS Lambda console!"
         echo "🔧 Library installations are handled by Docker Lambdas"
         echo "📝 All CRUD operations happen in Zip Lambdas"
