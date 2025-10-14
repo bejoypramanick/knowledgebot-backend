@@ -88,6 +88,7 @@ sam deploy \
     --region "$REGION" \
     --capabilities CAPABILITY_IAM \
     --parameter-overrides StageName="$STAGE" \
+    --resolve-s3 \
     --no-confirm-changeset \
     --no-fail-on-empty-changeset
 

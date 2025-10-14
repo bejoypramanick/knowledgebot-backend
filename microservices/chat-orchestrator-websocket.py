@@ -376,7 +376,8 @@ def lambda_handler(event, context):
         # Extract WebSocket information
         connection_id = event.get('requestContext', {}).get('connectionId')
         route_key = event.get('requestContext', {}).get('routeKey')
-        endpoint_url = event.get('requestContext', {}).get('domainName', {}).get('endpoint')
+        domain_name = event.get('requestContext', {}).get('domainName')
+        endpoint_url = f"https://{domain_name}" if domain_name else None
         
         if not connection_id:
             logger.error("❌ No connection ID found in event")
