@@ -42,6 +42,84 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    - name: Create ECR repository if it doesn't exist
+      run: |
+        # Get account ID
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        ECR_REPO_NAME="$ECR_REPOSITORY"
+        
+        echo "🔍 Checking if ECR repository exists: $ECR_REPO_NAME"
+        
+        # Check if repository exists
+        if aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region $AWS_REGION >/dev/null 2>&1; then
+          echo "✅ ECR repository $ECR_REPO_NAME already exists"
+        else
+          echo "📦 Creating ECR repository: $ECR_REPO_NAME"
+          aws ecr create-repository \
+            --repository-name "$ECR_REPO_NAME" \
+            --region $AWS_REGION \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256
+          echo "✅ ECR repository $ECR_REPO_NAME created successfully"
+        fi
+
+    - name: Ensure Lambda execution role exists
+      run: |
+        ROLE_NAME="lambda-execution-role"
+        
+        echo "🔍 Checking if Lambda execution role exists: $ROLE_NAME"
+        
+        # Check if role exists
+        if aws iam get-role --role-name "$ROLE_NAME" --region $AWS_REGION >/dev/null 2>&1; then
+          echo "✅ Lambda execution role $ROLE_NAME already exists"
+        else
+          echo "🔐 Creating Lambda execution role: $ROLE_NAME"
+          
+          # Create trust policy
+          cat > trust-policy.json << EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+        EOF
+          
+          # Create role
+          aws iam create-role \
+            --role-name "$ROLE_NAME" \
+            --assume-role-policy-document file://trust-policy.json \
+            --region $AWS_REGION
+          
+          # Attach basic execution policy
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole \
+            --region $AWS_REGION
+          
+          # Attach additional policies for our use case
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess \
+            --region $AWS_REGION || echo "S3 policy already attached"
+          
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess \
+            --region $AWS_REGION || echo "DynamoDB policy already attached"
+          
+          # Clean up
+          rm -f trust-policy.json
+          
+          echo "✅ Lambda execution role $ROLE_NAME created successfully"
+        fi
+
     - name: Build and push Docker image
       run: |
         # Get account ID
