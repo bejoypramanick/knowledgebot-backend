@@ -47,15 +47,37 @@ def lambda_handler(event, context):
                 })
             }
         
-        # Return success - library is loaded and ready
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "success": True,
-                "message": "Sentence Transformer library loaded successfully",
-                "components_available": list(SENTENCE_TRANSFORMER_COMPONENTS.keys())
-            })
-        }
+        # Parse the request
+        if isinstance(event.get('body'), str):
+            body = json.loads(event['body'])
+        else:
+            body = event.get('body', {})
+        
+        # Check if this is an embedding request
+        if 'texts' in body:
+            texts = body['texts']
+            logger.info(f"Generating embeddings for {len(texts)} texts")
+            
+            # Generate embeddings using the loaded model
+            embeddings = SENTENCE_TRANSFORMER_COMPONENTS['embedding_model'].encode(texts)
+            
+            return {
+                "statusCode": 200,
+                "body": json.dumps({
+                    "success": True,
+                    "embeddings": embeddings.tolist()  # Convert numpy array to list
+                })
+            }
+        else:
+            # Return success - library is loaded and ready
+            return {
+                "statusCode": 200,
+                "body": json.dumps({
+                    "success": True,
+                    "message": "Sentence Transformer library loaded successfully",
+                    "components_available": list(SENTENCE_TRANSFORMER_COMPONENTS.keys())
+                })
+            }
         
     except Exception as e:
         logger.error(f"Error in Sentence Transformer library handler: {e}")
