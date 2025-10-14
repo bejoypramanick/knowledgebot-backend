@@ -8,8 +8,8 @@ torch==2.0.1+cpu
 numpy>=1.24.0,<1.25.0
 scipy>=1.10.0,<1.11.0
 
-# Use compatible versions with better wheel support
-transformers==4.21.3
+# Use older versions with better wheel support
+transformers==4.20.1
 sentence-transformers==2.2.2
 
 # Note: tokenizers and sentencepiece are installed separately in Dockerfile
