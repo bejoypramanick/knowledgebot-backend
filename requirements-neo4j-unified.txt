@@ -1,8 +1,0 @@
-# requirements-neo4j-unified.txt
-# Neo4j Unified Handler Requirements
-# Handles both search and write operations
-
-neo4j>=5.24.0
-pydantic>=2.12.0
-orjson>=3.9.0
-httpx>=0.25.0

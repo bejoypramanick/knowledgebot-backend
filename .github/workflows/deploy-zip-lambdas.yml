@@ -1,0 +1,117 @@
+name: Deploy Zip Lambda Functions
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'microservices/*-business-logic.py'
+      - 'microservices/dynamodb-crud-handler.py'
+      - 'microservices/s3-unified-handler.py'
+      - 'requirements-zip-lambdas.txt'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy-zip-lambdas:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Deploy business logic Lambda functions
+      run: |
+        # Get account ID
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        
+        # Business logic handlers to deploy
+        declare -a BUSINESS_HANDLERS=(
+          "document-processor-business-logic"
+          "chat-orchestrator-business-logic"
+          "dynamodb-crud-handler"
+          "s3-unified-handler"
+        )
+        
+        for handler in "${BUSINESS_HANDLERS[@]}"; do
+          echo "Creating deployment package for $handler..."
+          
+          # Create temporary directory
+          TEMP_DIR=$(mktemp -d)
+          cd $TEMP_DIR
+          
+          # Copy handler file
+          cp ../microservices/$handler.py .
+          
+          # Install minimal dependencies for business logic
+          pip install -r ../requirements-zip-lambdas.txt -t . --quiet
+          
+          # Create zip package
+          zip -r $handler.zip . >/dev/null
+          
+          echo "Deploying Lambda function: $handler"
+          
+          # Check if function exists
+          if aws lambda get-function --function-name $handler --region $AWS_REGION >/dev/null 2>&1; then
+            # Update existing function
+            aws lambda update-function-code \
+              --function-name $handler \
+              --zip-file fileb://$handler.zip \
+              --region $AWS_REGION
+            echo "✅ $handler updated successfully"
+          else
+            # Create new function
+            aws lambda create-function \
+              --function-name $handler \
+              --runtime python3.11 \
+              --role arn:aws:iam::$ACCOUNT_ID:role/lambda-execution-role \
+              --handler $handler.lambda_handler \
+              --zip-file fileb://$handler.zip \
+              --timeout 900 \
+              --memory-size 512 \
+              --region $AWS_REGION
+            echo "✅ $handler created successfully"
+          fi
+          
+          # Clean up
+          cd -
+          rm -rf $TEMP_DIR
+        done
+
+    - name: Set environment variables for business logic functions
+      run: |
+        # Set environment variables for business logic functions to know which library functions to call
+        declare -a BUSINESS_HANDLERS=(
+          "document-processor-business-logic"
+          "chat-orchestrator-business-logic"
+        )
+        
+        for handler in "${BUSINESS_HANDLERS[@]}"; do
+          echo "Setting environment variables for $handler..."
+          
+          aws lambda update-function-configuration \
+            --function-name $handler \
+            --environment Variables="{
+              DOCLING_LIBRARY_FUNCTION=docling-library-handler,
+              PINECONE_LIBRARY_FUNCTION=pinecone-library-handler,
+              NEO4J_LIBRARY_FUNCTION=neo4j-library-handler,
+              OPENAI_LIBRARY_FUNCTION=openai-library-handler,
+              SENTENCE_TRANSFORMER_LIBRARY_FUNCTION=sentence-transformer-library-handler,
+              CHUNKS_TABLE=document-chunks,
+              PROCESSED_DOCUMENTS_BUCKET=processed-documents
+            }" \
+            --region $AWS_REGION || true
+        done

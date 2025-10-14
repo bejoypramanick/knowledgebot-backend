@@ -1,0 +1,42 @@
+name: Deploy All Lambda Functions
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy-docker-lambdas:
+    uses: ./.github/workflows/deploy-docker-lambdas.yml
+
+  deploy-zip-lambdas:
+    needs: deploy-docker-lambdas
+    uses: ./.github/workflows/deploy-zip-lambdas.yml
+
+  summary:
+    needs: [deploy-docker-lambdas, deploy-zip-lambdas]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Deployment Summary
+      run: |
+        echo "🎉 Lambda Deployment Summary"
+        echo "================================"
+        echo ""
+        echo "Docker Lambdas (Library Installations):"
+        echo "  ✅ docling-library-handler"
+        echo "  ✅ pinecone-library-handler"
+        echo "  ✅ neo4j-library-handler"
+        echo "  ✅ openai-library-handler"
+        echo "  ✅ sentence-transformer-library-handler"
+        echo ""
+        echo "Zip Lambdas (Business Logic - Viewable in AWS Console):"
+        echo "  ✅ document-processor-business-logic"
+        echo "  ✅ chat-orchestrator-business-logic"
+        echo "  ✅ dynamodb-crud-handler"
+        echo "  ✅ s3-unified-handler"
+        echo ""
+        echo "💡 All business logic code is now viewable in AWS Lambda console!"
+        echo "🔧 Library installations are handled by Docker Lambdas"
+        echo "📝 All CRUD operations happen in Zip Lambdas"

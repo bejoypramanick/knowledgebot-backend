@@ -1,0 +1,9 @@
+# Requirements for Zip-based Lambda functions
+# These contain ONLY business logic and AWS SDK
+
+# AWS SDK (already available in Lambda runtime)
+boto3>=1.26.0
+botocore>=1.29.0
+
+# Standard library dependencies
+# No heavy ML/AI libraries - all handled by Docker Lambdas
