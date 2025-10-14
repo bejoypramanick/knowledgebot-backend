@@ -65,9 +65,15 @@ def lambda_handler(event, context):
         
         logger.info(f"✅ OpenAI components available: {list(OPENAI_COMPONENTS.keys())}")
         
-        # Parse the request
-        logger.info(f"📊 Parsing request body...")
-        if isinstance(event.get('body'), str):
+        # Parse the request - handle both direct event and body-wrapped formats
+        logger.info(f"📊 Parsing request...")
+        
+        # Check if operation_type is directly in the event (Lambda invocation format)
+        if 'operation_type' in event:
+            logger.info(f"✅ Found 'operation_type' directly in event")
+            body = event
+        # Check if operation_type is in the body field (API Gateway format)
+        elif isinstance(event.get('body'), str):
             try:
                 body = json.loads(event['body'])
                 logger.info(f"✅ Successfully parsed JSON body")

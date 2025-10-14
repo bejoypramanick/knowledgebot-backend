@@ -71,9 +71,15 @@ def lambda_handler(event, context):
         
         logger.info(f"✅ Sentence Transformer components available: {list(SENTENCE_TRANSFORMER_COMPONENTS.keys())}")
         
-        # Parse the request
-        logger.info(f"📊 Parsing request body...")
-        if isinstance(event.get('body'), str):
+        # Parse the request - handle both direct event and body-wrapped formats
+        logger.info(f"📊 Parsing request...")
+        
+        # Check if texts is directly in the event (Lambda invocation format)
+        if 'texts' in event:
+            logger.info(f"✅ Found 'texts' directly in event")
+            body = event
+        # Check if texts is in the body field (API Gateway format)
+        elif isinstance(event.get('body'), str):
             try:
                 body = json.loads(event['body'])
                 logger.info(f"✅ Successfully parsed JSON body")
