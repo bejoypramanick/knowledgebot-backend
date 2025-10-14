@@ -17,6 +17,10 @@ import signal
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+# Import error logging utility
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from error_logger import log_error, log_custom_error, log_timeout_error, log_service_failure
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -293,6 +297,16 @@ async def process_message_async(query: str, conversation_history: List[Dict[str,
             
     except Exception as e:
         logger.error(f"❌ Error in async message processing: {e}")
+        
+        # Log async processing error
+        log_error(
+            'chat-orchestrator-websocket-async',
+            e,
+            None,
+            {'connection_id': connection_id, 'query': query[:100]},
+            'ERROR'
+        )
+        
         error_message = {
             "type": "error",
             "message": f"Error processing message: {str(e)}",
@@ -914,6 +928,15 @@ def lambda_handler(event, context):
                 
             except TimeoutError:
                 logger.warning("⏰ A service timed out during message processing")
+                
+                # Log timeout error
+                log_timeout_error(
+                    'chat-orchestrator-websocket',
+                    'message_processing',
+                    context,
+                    {'connection_id': connection_id, 'query': query[:100]}
+                )
+                
                 error_message = {
                     "type": "error",
                     "message": "One of our services is taking longer than expected. I'll try to respond with what I can, but you might want to try rephrasing your question.",
@@ -924,6 +947,16 @@ def lambda_handler(event, context):
                 
             except Exception as e:
                 logger.error(f"❌ Error processing WebSocket message: {e}")
+                
+                # Log general error
+                log_error(
+                    'chat-orchestrator-websocket',
+                    e,
+                    context,
+                    {'connection_id': connection_id, 'query': query[:100]},
+                    'ERROR'
+                )
+                
                 error_message = {
                     "type": "error",
                     "message": f"Error processing message: {str(e)}",

@@ -1,0 +1,222 @@
+# Error Logging Infrastructure
+# CloudFormation template for centralized error logging
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Centralized Error Logging Infrastructure for KnowledgeBot'
+
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+    Description: Stage name for the deployment
+
+Resources:
+  # DynamoDB Table for Error Storage
+  ErrorLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${StageName}-knowledgebot-error-logs'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: error_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        - AttributeName: source_lambda
+          AttributeType: S
+        - AttributeName: severity
+          AttributeType: S
+      KeySchema:
+        - AttributeName: error_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: timestamp-index
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: source-lambda-index
+          KeySchema:
+            - AttributeName: source_lambda
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: severity-index
+          KeySchema:
+            - AttributeName: severity
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # S3 Bucket for Critical Error Storage (Optional - for long-term storage)
+  ErrorLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${StageName}-knowledgebot-error-logs-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldErrors
+            Status: Enabled
+            ExpirationInDays: 30  # Reduced from 90 days
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # CloudWatch Log Group for Error Aggregation
+  ErrorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${StageName}-error-logger'
+      RetentionInDays: 14  # Reduced retention for cost optimization
+
+  # Error Logger Lambda Function
+  ErrorLoggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${StageName}-error-logger'
+      CodeUri: microservices/
+      Handler: error-logger-handler.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          ERROR_LOG_GROUP: !Ref ErrorLogGroup
+          ERROR_TABLE: !Ref ErrorLogsTable
+          ERROR_BUCKET: !Ref ErrorLogsBucket
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:Scan
+                - dynamodb:Query
+              Resource: !GetAtt ErrorLogsTable.Arn
+            - Effect: Allow
+              Action:
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub '${ErrorLogGroup}:*'
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub '${ErrorLogsBucket}/*'
+      Events:
+        # API Gateway for error querying
+        ErrorQueryApi:
+          Type: Api
+          Properties:
+            Path: /errors
+            Method: get
+            RestApiId: !Ref ErrorQueryApi
+
+  # API Gateway for Error Querying
+  ErrorQueryApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref StageName
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # Lambda for Error Querying
+  ErrorQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${StageName}-error-query'
+      CodeUri: microservices/
+      Handler: error-query-handler.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          ERROR_TABLE: !Ref ErrorLogsTable
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:Query
+              Resource: !GetAtt ErrorLogsTable.Arn
+      Events:
+        ErrorQueryApi:
+          Type: Api
+          Properties:
+            Path: /errors
+            Method: get
+            RestApiId: !Ref ErrorQueryApi
+
+  # CloudWatch Alarm for High Error Rate
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${StageName}-high-error-rate'
+      AlarmDescription: 'High error rate detected in error logger'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5  # Reduced threshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ErrorLoggerFunction
+
+  # CloudWatch Alarm for Critical Errors
+  CriticalErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${StageName}-critical-errors'
+      AlarmDescription: 'Critical errors detected'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ErrorLoggerFunction
+      TreatMissingData: notBreaching
+
+Outputs:
+  ErrorLoggerFunctionArn:
+    Description: 'Error Logger Lambda Function ARN'
+    Value: !GetAtt ErrorLoggerFunction.Arn
+    Export:
+      Name: !Sub '${StageName}-ErrorLoggerFunctionArn'
+
+  ErrorLogsTableName:
+    Description: 'Error Logs DynamoDB Table Name'
+    Value: !Ref ErrorLogsTable
+    Export:
+      Name: !Sub '${StageName}-ErrorLogsTableName'
+
+  ErrorLogsBucketName:
+    Description: 'Error Logs S3 Bucket Name'
+    Value: !Ref ErrorLogsBucket
+    Export:
+      Name: !Sub '${StageName}-ErrorLogsBucketName'
+
+  ErrorQueryApiUrl:
+    Description: 'Error Query API URL'
+    Value: !Sub 'https://${ErrorQueryApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/errors'
+    Export:
+      Name: !Sub '${StageName}-ErrorQueryApiUrl'

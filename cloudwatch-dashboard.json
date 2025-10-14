@@ -1,0 +1,76 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/Lambda", "Errors", "FunctionName", "prod-error-logger" ],
+          [ ".", "Invocations", ".", "." ],
+          [ ".", "Duration", ".", "." ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "ap-south-1",
+        "title": "Error Logger Lambda Metrics",
+        "period": 300,
+        "stat": "Sum"
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 6,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/prod-error-logger' | fields @timestamp, @message\n| filter @message like /ERROR/ or @message like /CRITICAL/\n| sort @timestamp desc\n| limit 50",
+        "region": "ap-south-1",
+        "title": "Recent Errors from All Lambdas",
+        "view": "table"
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 12,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/prod-error-logger' | fields @timestamp, @message\n| filter @message like /CRITICAL/\n| sort @timestamp desc\n| limit 20",
+        "region": "ap-south-1",
+        "title": "Critical Errors",
+        "view": "table"
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 18,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/prod-error-logger' | fields @timestamp, @message\n| filter @message like /ERROR/\n| stats count() by bin(5m)",
+        "region": "ap-south-1",
+        "title": "Error Rate Over Time",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 18,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/prod-error-logger' | fields @timestamp, @message\n| filter @message like /ERROR/\n| fields @message\n| parse @message /Source: (?<source_lambda>\\S+)/\n| stats count() by source_lambda\n| sort count desc",
+        "region": "ap-south-1",
+        "title": "Errors by Lambda Function",
+        "view": "table"
+      }
+    }
+  ]
+}
