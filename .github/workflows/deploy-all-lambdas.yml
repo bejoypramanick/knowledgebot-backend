@@ -3,11 +3,6 @@ name: Deploy All Lambda Functions
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'Dockerfile.*'
-      - 'requirements-*.txt'
-      - 'microservices/*.py'
-      - '.github/workflows/deploy-all-lambdas.yml'
   workflow_dispatch:
 
 env:
@@ -15,105 +10,28 @@ env:
   ECR_REPOSITORY: knowledgebot-lambdas
 
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      docling-changed: ${{ steps.changes.outputs.docling }}
-      pinecone-changed: ${{ steps.changes.outputs.pinecone }}
-      neo4j-changed: ${{ steps.changes.outputs.neo4j }}
-      openai-changed: ${{ steps.changes.outputs.openai }}
-      sentence-transformer-changed: ${{ steps.changes.outputs.sentence-transformer }}
-      any-changed: ${{ steps.changes.outputs.any }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-      
-      - name: Detect changes
-        uses: dorny/paths-filter@v2
-        id: changes
-        with:
-          filters: |
-            docling:
-              - 'Dockerfile.docling-library'
-              - 'requirements-docling-library.txt'
-              - 'microservices/docling-library-handler.py'
-            pinecone:
-              - 'Dockerfile.pinecone-library'
-              - 'requirements-pinecone-library.txt'
-              - 'microservices/pinecone-library-handler.py'
-            neo4j:
-              - 'Dockerfile.neo4j-library'
-              - 'requirements-neo4j-library.txt'
-              - 'microservices/neo4j-library-handler.py'
-            openai:
-              - 'Dockerfile.openai-library'
-              - 'requirements-openai-library.txt'
-              - 'microservices/openai-library-handler.py'
-            sentence-transformer:
-              - 'Dockerfile.sentence-transformer-library'
-              - 'requirements-sentence-transformer-library.txt'
-              - 'microservices/sentence-transformer-library-handler.py'
-      
-      - name: Show change summary
-        run: |
-          echo "📋 Change Detection Summary:"
-          echo "================================"
-          echo "Docling Library: ${{ steps.changes.outputs.docling }}"
-          echo "Pinecone Library: ${{ steps.changes.outputs.pinecone }}"
-          echo "Neo4j Library: ${{ steps.changes.outputs.neo4j }}"
-          echo "OpenAI Library: ${{ steps.changes.outputs.openai }}"
-          echo "Sentence Transformer Library: ${{ steps.changes.outputs.sentence-transformer }}"
-          echo "================================"
-          if [ "${{ steps.changes.outputs.any }}" == "true" ]; then
-            echo "✅ Some libraries have changes, proceeding with build"
-          else
-            echo "⏭️ No library changes detected, skipping build"
-          fi
-
   build-docker-images:
-    needs: detect-changes
     runs-on: ubuntu-latest
     environment: chatbot
-    if: needs.detect-changes.outputs.any-changed == 'true'
     strategy:
       matrix:
         include:
           - handler: docling-library
             function: docling-library-handler
-            changed: ${{ needs.detect-changes.outputs.docling-changed }}
           - handler: pinecone-library
             function: pinecone-library-handler
-            changed: ${{ needs.detect-changes.outputs.pinecone-changed }}
           - handler: neo4j-library
             function: neo4j-library-handler
-            changed: ${{ needs.detect-changes.outputs.neo4j-changed }}
           - handler: openai-library
             function: openai-library-handler
-            changed: ${{ needs.detect-changes.outputs.openai-changed }}
           - handler: sentence-transformer-library
             function: sentence-transformer-library-handler
-            changed: ${{ needs.detect-changes.outputs.sentence-transformer-changed }}
     
     steps:
-    - name: Check if ${{ matrix.handler }} has changes
-      run: |
-        if [ "${{ matrix.changed }}" == "true" ]; then
-          echo "✅ ${{ matrix.handler }} has changes, proceeding with build"
-          echo "changed=true" >> $GITHUB_OUTPUT
-        else
-          echo "⏭️ ${{ matrix.handler }} has no changes, skipping build"
-          echo "changed=false" >> $GITHUB_OUTPUT
-        fi
-      id: check-changes
-
     - name: Checkout code
-      if: steps.check-changes.outputs.changed == 'true'
       uses: actions/checkout@v4
 
     - name: Configure AWS credentials
-      if: steps.check-changes.outputs.changed == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -121,12 +39,10 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Login to Amazon ECR
-      if: steps.check-changes.outputs.changed == 'true'
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Create ECR repository if it doesn't exist
-      if: steps.check-changes.outputs.changed == 'true'
       run: |
         # Get account ID
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -148,7 +64,6 @@ jobs:
         fi
 
     - name: Ensure Lambda execution role exists
-      if: steps.check-changes.outputs.changed == 'true'
       run: |
         ROLE_NAME="lambda-execution-role"
         
@@ -206,7 +121,6 @@ jobs:
         fi
 
     - name: Build and push Docker image
-      if: steps.check-changes.outputs.changed == 'true'
       run: |
         # Get account ID
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -225,7 +139,6 @@ jobs:
         echo "✅ ${{ matrix.handler }} pushed successfully"
 
     - name: Deploy Lambda function
-      if: steps.check-changes.outputs.changed == 'true'
       run: |
         # Get account ID
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -254,10 +167,9 @@ jobs:
         fi
 
   deploy-zip-lambdas:
-    needs: [detect-changes, build-docker-images]
+    needs: build-docker-images
     runs-on: ubuntu-latest
     environment: chatbot
-    if: needs.detect-changes.outputs.any-changed == 'true'
     
     steps:
     - name: Checkout code
