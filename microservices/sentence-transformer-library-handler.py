@@ -14,8 +14,13 @@ logger.setLevel(logging.INFO)
 
 # Initialize Sentence Transformer - THIS IS THE ONLY PURPOSE OF THIS DOCKER LAMBDA
 try:
+    import os
+    # Set cache directory to /tmp which is writable in Lambda
+    os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
+    os.environ['HF_HOME'] = '/tmp/huggingface'
+    
     from sentence_transformers import SentenceTransformer
-    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    embedding_model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='/tmp/sentence_transformers_cache')
     logger.info("✅ Sentence Transformer library imported and initialized successfully")
     
     # Export the initialized components for use by Zip Lambdas
