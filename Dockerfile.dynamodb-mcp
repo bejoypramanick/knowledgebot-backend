@@ -1,53 +1,10 @@
 # Official DynamoDB MCP Server Dockerfile
-# Based on Python with AWS DynamoDB capabilities
+# Based on the official awslabs/dynamodb-mcp-server Docker image
 
-FROM python:3.11-slim
+FROM awslabs/dynamodb-mcp-server:latest
 
-# Set working directory
-WORKDIR /app
-
-# Install system dependencies and Python packages
+# Install curl for health check
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-# Install AWS SDK and MCP packages
-RUN pip install boto3 mcp
-
-# Create a simple DynamoDB MCP server
-RUN echo '#!/usr/bin/env python3\n\
-import json\n\
-import logging\n\
-import os\n\
-import boto3\n\
-from http.server import HTTPServer, BaseHTTPRequestHandler\n\
-\n\
-class DynamoDBMCPHandler(BaseHTTPRequestHandler):\n\
-    def do_POST(self):\n\
-        if self.path == "/mcp":\n\
-            content_length = int(self.headers["Content-Length"])\n\
-            post_data = self.rfile.read(content_length)\n\
-            request = json.loads(post_data.decode("utf-8"))\n\
-            \n\
-            response = {"result": "DynamoDB MCP Server - Ready"}\n\
-            \n\
-            self.send_response(200)\n\
-            self.send_header("Content-type", "application/json")\n\
-            self.end_headers()\n\
-            self.wfile.write(json.dumps(response).encode())\n\
-        elif self.path == "/health":\n\
-            self.send_response(200)\n\
-            self.send_header("Content-type", "application/json")\n\
-            self.end_headers()\n\
-            self.wfile.write(json.dumps({"status": "healthy"}).encode())\n\
-        else:\n\
-            self.send_response(404)\n\
-            self.end_headers()\n\
-\n\
-if __name__ == "__main__":\n\
-    port = int(os.environ.get("PORT", 3000))\n\
-    server = HTTPServer(("0.0.0.0", port), DynamoDBMCPHandler)\n\
-    print(f"DynamoDB MCP Server running on port {port}")\n\
-    server.serve_forever()\n\
-' > /app/server.py && chmod +x /app/server.py
 
 # Set environment variables
 ENV AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
@@ -63,5 +20,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
-# Start the DynamoDB MCP server
-CMD ["python", "/app/server.py"]
+# The official image already has the correct CMD
