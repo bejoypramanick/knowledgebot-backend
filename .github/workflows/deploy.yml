@@ -290,6 +290,67 @@ jobs:
           }' \
           --region ${{ env.AWS_REGION }}
 
+    # Deploy Zip Lambda functions (Business Logic)
+    - name: Deploy document-processor-business-logic Lambda function
+      run: |
+        # Create deployment package
+        zip -r document-processor-business-logic.zip microservices/document-processor-business-logic.py microservices/mcp-client.py microservices/error-logger-handler.py microservices/error-query-handler.py
+        
+        # Deploy or update Lambda function
+        aws lambda update-function-code \
+          --function-name document-processor-business-logic \
+          --zip-file fileb://document-processor-business-logic.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name document-processor-business-logic \
+          --runtime python3.9 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
+          --handler document-processor-business-logic.lambda_handler \
+          --zip-file fileb://document-processor-business-logic.zip \
+          --timeout 900 \
+          --memory-size 1024 \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Deploy chat-orchestrator-business-logic Lambda function
+      run: |
+        # Create deployment package
+        zip -r chat-orchestrator-business-logic.zip microservices/chat-orchestrator-business-logic.py microservices/mcp-client.py microservices/error-logger-handler.py microservices/error-query-handler.py
+        
+        # Deploy or update Lambda function
+        aws lambda update-function-code \
+          --function-name chat-orchestrator-business-logic \
+          --zip-file fileb://chat-orchestrator-business-logic.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name chat-orchestrator-business-logic \
+          --runtime python3.9 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
+          --handler chat-orchestrator-business-logic.lambda_handler \
+          --zip-file fileb://chat-orchestrator-business-logic.zip \
+          --timeout 300 \
+          --memory-size 512 \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Deploy s3-unified-handler Lambda function
+      run: |
+        # Create deployment package
+        zip -r s3-unified-handler.zip microservices/s3-unified-handler.py microservices/error-logger-handler.py microservices/error-query-handler.py
+        
+        # Deploy or update Lambda function
+        aws lambda update-function-code \
+          --function-name s3-unified-handler \
+          --zip-file fileb://s3-unified-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name s3-unified-handler \
+          --runtime python3.9 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
+          --handler s3-unified-handler.lambda_handler \
+          --zip-file fileb://s3-unified-handler.zip \
+          --timeout 300 \
+          --memory-size 256 \
+          --region ${{ env.AWS_REGION }}
+
     # Clean up redundant AWS resources in parallel
     - name: Delete redundant Lambda functions
       run: |
@@ -297,8 +358,6 @@ jobs:
           "openai-agents-handler"
           "dynamodb-mcp-handler"
           "chat-orchestrator-websocket"
-          "document-processor-business-logic"
-          "s3-unified-handler"
           "error-logger-handler"
           "error-query-handler"
           "docling-library-handler"
@@ -363,12 +422,18 @@ jobs:
 
     - name: Notify deployment status
       run: |
-        echo "✅ MCP servers deployed successfully!"
-        echo "Available MCP servers:"
-        echo "- Docling MCP Server"
-        echo "- Pinecone MCP Server" 
-        echo "- DynamoDB MCP Server"
-        echo "- Neo4j Cypher MCP Server"
-        echo "- Neo4j Data Modeling MCP Server"
+        echo "✅ KnowledgeBot Backend deployed successfully!"
         echo ""
-        echo "All redundant AWS resources have been cleaned up."
+        echo "🏗️ MCP Architecture:"
+        echo "- Docling MCP Server (Document processing)"
+        echo "- Pinecone MCP Server (Vector operations)" 
+        echo "- DynamoDB MCP Server (Database operations)"
+        echo "- Neo4j Cypher MCP Server (Graph queries)"
+        echo "- Neo4j Data Modeling MCP Server (Graph modeling)"
+        echo ""
+        echo "📦 Business Logic Functions:"
+        echo "- document-processor-business-logic (Document pipeline)"
+        echo "- chat-orchestrator-business-logic (Chat orchestration)"
+        echo "- s3-unified-handler (S3 operations)"
+        echo ""
+        echo "🧹 Cleanup completed - All redundant AWS resources removed."
