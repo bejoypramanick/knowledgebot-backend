@@ -16,7 +16,7 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+  ECR_REGISTRY: 090163643302.dkr.ecr.ap-south-1.amazonaws.com
 
 jobs:
   # Setup job - runs first
