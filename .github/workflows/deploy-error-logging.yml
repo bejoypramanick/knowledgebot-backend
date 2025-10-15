@@ -1,13 +1,14 @@
 name: Deploy Error Logging Infrastructure
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'error-logging-infrastructure.yml'
-      - 'microservices/error-logger-handler.py'
-      - 'microservices/error-query-handler.py'
-      - 'utils/error_logger.py'
+  # Disabled - using deploy.yml instead
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'error-logging-infrastructure.yml'
+  #     - 'microservices/error-logger-handler.py'
+  #     - 'microservices/error-query-handler.py'
+  #     - 'utils/error_logger.py'
   workflow_dispatch:
     inputs:
       stage:

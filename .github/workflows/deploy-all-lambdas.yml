@@ -1,8 +1,9 @@
 name: Deploy All Lambda Functions
 
 on:
-  push:
-    branches: [ main ]
+  # Disabled - using deploy.yml instead
+  # push:
+  #   branches: [ main ]
   workflow_dispatch:
 
 env:
