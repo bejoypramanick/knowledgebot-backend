@@ -57,6 +57,20 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    - name: Create ECR repositories
+      run: |
+        # Create ECR repositories for all MCP servers
+        aws ecr create-repository --repository-name knowledgebot-docling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-neo4j-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-dynamodb-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        
+        # Set lifecycle policy to keep only latest 10 images
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-docling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-dynamodb-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
