@@ -244,6 +244,52 @@ class UniversalMCPClient:
             }
         })
     
+    # Docling MCP operations
+    async def docling_process_document(self, document_bytes: str, filename: str) -> Dict[str, Any]:
+        """Process a document using the official Docling MCP server"""
+        return await self._make_jsonrpc_call("docling", "tools/call", {
+            "name": "process_document",
+            "arguments": {
+                "document_bytes": document_bytes,
+                "filename": filename
+            }
+        })
+    
+    async def docling_convert_pdf_to_markdown(self, document_bytes: str, filename: str) -> Dict[str, Any]:
+        """Convert PDF to Markdown using the official Docling MCP server"""
+        return await self._make_jsonrpc_call("docling", "tools/call", {
+            "name": "convert_pdf_to_markdown",
+            "arguments": {
+                "document_bytes": document_bytes,
+                "filename": filename
+            }
+        })
+    
+    async def docling_convert_document_to_json(self, document_bytes: str, filename: str) -> Dict[str, Any]:
+        """Convert document to structured JSON using the official Docling MCP server"""
+        return await self._make_jsonrpc_call("docling", "tools/call", {
+            "name": "convert_document_to_json",
+            "arguments": {
+                "document_bytes": document_bytes,
+                "filename": filename
+            }
+        })
+    
+    async def docling_chunk_document(self, document_bytes: str, filename: str, chunk_size: int = 1000) -> Dict[str, Any]:
+        """Chunk a document using the official Docling MCP server"""
+        return await self._make_jsonrpc_call("docling", "tools/call", {
+            "name": "chunk_document",
+            "arguments": {
+                "document_bytes": document_bytes,
+                "filename": filename,
+                "chunk_size": chunk_size
+            }
+        })
+    
+    async def docling_list_tools(self) -> Dict[str, Any]:
+        """List available tools from the Docling MCP server"""
+        return await self._make_jsonrpc_call("docling", "tools/list", {})
+    
     # Health checks
     async def get_health(self, server: str = None) -> Dict[str, Any]:
         """Get health status of MCP servers"""

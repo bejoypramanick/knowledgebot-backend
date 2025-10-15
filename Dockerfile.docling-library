@@ -1,4 +1,4 @@
-# Docling MCP Server - Custom MCP server for document processing
+# Docling MCP Server - Lambda wrapper for official Docling MCP Server
 FROM public.ecr.aws/lambda/python:3.11
 
 # Set working directory
@@ -12,27 +12,23 @@ RUN yum update -y && \
         libwebp-devel tcl-devel tk-devel && \
     yum clean all
 
+# Install uvx (package manager for MCP servers)
+RUN pip install --no-cache-dir uvx
+
 # Copy requirements and install Python dependencies
 COPY requirements-docling-library.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-docling-library.txt
 
-# Install MCP SDK and additional dependencies
-RUN pip install --no-cache-dir mcp
-
-# Copy the MCP server implementation
+# Copy the MCP server handler
 COPY microservices/docling-mcp-server.py ${LAMBDA_TASK_ROOT}/
 
 # Set environment variables
 ENV PYTHONPATH=${LAMBDA_TASK_ROOT}
-ENV MCP_SERVER_NAME=docling-mcp-server
+ENV AWS_REGION=${AWS_REGION}
 
 # Expose port for MCP server
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
-
-# Start the MCP server
+# Start the Docling MCP server handler
 CMD ["python", "docling-mcp-server.py"]
