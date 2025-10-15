@@ -1,0 +1,46 @@
+# Official Neo4j Cypher MCP Server Dockerfile
+# Based on the mcp-neo4j-cypher package
+
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install uvx for package management
+RUN pip install uvx
+
+# Install the Neo4j Cypher MCP Server
+RUN uvx install mcp-neo4j-cypher@0.4.1
+
+# Create configuration file
+RUN echo '{\
+  "mcpServers": {\
+    "neo4j-database": {\
+      "command": "uvx",\
+      "args": ["mcp-neo4j-cypher@0.4.1", "--transport", "stdio"],\
+      "env": {\
+        "NEO4J_URI": "${NEO4J_URI}",\
+        "NEO4J_USERNAME": "${NEO4J_USERNAME}",\
+        "NEO4J_PASSWORD": "${NEO4J_PASSWORD}",\
+        "NEO4J_DATABASE": "${NEO4J_DATABASE}"\
+      }\
+    }\
+  }\
+}' > /app/mcp.json
+
+# Set environment variables
+ENV NEO4J_URI=${NEO4J_URI:-bolt://localhost:7687}
+ENV NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+ENV NEO4J_PASSWORD=${NEO4J_PASSWORD}
+ENV NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+ENV PORT=${PORT:-3000}
+
+# Expose the MCP server port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Start the Neo4j Cypher MCP server
+CMD ["uvx", "run", "mcp-neo4j-cypher@0.4.1", "--config", "/app/mcp.json"]

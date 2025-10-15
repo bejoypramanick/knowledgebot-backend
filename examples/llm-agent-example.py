@@ -47,10 +47,15 @@ class IntelligentLLMAgent:
            - Text extraction and chunking
            - Document analysis
            
-        4. Neo4j MCP Server:
-           - Graph database operations
-           - Relationship queries
-           - Graph analysis
+        4. Neo4j Cypher MCP Server:
+           - Graph database query operations
+           - Cypher query execution
+           - Graph data retrieval and analysis
+           
+        5. Neo4j Data Modeling MCP Server:
+           - Graph schema design and validation
+           - Node and relationship creation
+           - Graph data modeling operations
         
         Respond with a JSON object containing:
         - required_servers: List of MCP servers needed
@@ -110,13 +115,35 @@ class IntelligentLLMAgent:
                             )
                             server_results.append({"operation": "process_document", "result": doc_result})
                     
-                    elif server == "neo4j":
-                        # Handle Neo4j operations
-                        if "cypher_query" in analysis.get("operations", []):
-                            cypher_result = await client.neo4j_cypher_query(
-                                query=analysis.get("parameters", {}).get("cypher_query", "MATCH (n) RETURN n LIMIT 10")
+                    elif server == "neo4j-cypher":
+                        # Handle Neo4j Cypher operations
+                        if "execute_query" in analysis.get("operations", []):
+                            cypher_result = await client.neo4j_execute_query(
+                                cypher=analysis.get("parameters", {}).get("cypher", "MATCH (n) RETURN n LIMIT 10")
                             )
-                            server_results.append({"operation": "cypher_query", "result": cypher_result})
+                            server_results.append({"operation": "execute_query", "result": cypher_result})
+                        
+                        if "list_nodes" in analysis.get("operations", []):
+                            nodes_result = await client.neo4j_list_nodes(
+                                label=analysis.get("parameters", {}).get("label"),
+                                limit=analysis.get("parameters", {}).get("limit", 100)
+                            )
+                            server_results.append({"operation": "list_nodes", "result": nodes_result})
+                    
+                    elif server == "neo4j-modeling":
+                        # Handle Neo4j Data Modeling operations
+                        if "create_node" in analysis.get("operations", []):
+                            node_result = await client.neo4j_create_node(
+                                label=analysis.get("parameters", {}).get("label", "Node"),
+                                properties=analysis.get("parameters", {}).get("properties", {})
+                            )
+                            server_results.append({"operation": "create_node", "result": node_result})
+                        
+                        if "validate_schema" in analysis.get("operations", []):
+                            schema_result = await client.neo4j_validate_schema(
+                                schema=analysis.get("parameters", {}).get("schema", {})
+                            )
+                            server_results.append({"operation": "validate_schema", "result": schema_result})
                     
                     results[server] = server_results
             
@@ -170,6 +197,8 @@ async def main():
         "List all tables in my database",
         "Process this PDF document and extract key information",
         "Find all users connected to user John in the social network",
+        "Create a new Person node in the graph database",
+        "Validate the schema for my social network graph",
         "Search for research papers about climate change and store the results"
     ]
     

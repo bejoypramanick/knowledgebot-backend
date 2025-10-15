@@ -23,13 +23,15 @@ class UniversalMCPClient:
                  pinecone_mcp_url: str = None,
                  dynamodb_mcp_url: str = None,
                  docling_mcp_url: str = None,
-                 neo4j_mcp_url: str = None):
+                 neo4j_cypher_mcp_url: str = None,
+                 neo4j_modeling_mcp_url: str = None):
         
         self.mcp_servers = {
             "pinecone": pinecone_mcp_url or os.environ.get('PINECONE_MCP_URL', 'http://localhost:3000/mcp'),
             "dynamodb": dynamodb_mcp_url or os.environ.get('DYNAMODB_MCP_URL', 'http://localhost:3001/mcp'),
             "docling": docling_mcp_url or os.environ.get('DOCLING_MCP_URL', 'http://localhost:3002/mcp'),
-            "neo4j": neo4j_mcp_url or os.environ.get('NEO4J_MCP_URL', 'http://localhost:3003/mcp')
+            "neo4j-cypher": neo4j_cypher_mcp_url or os.environ.get('NEO4J_CYPHER_MCP_URL', 'http://localhost:3003/mcp'),
+            "neo4j-modeling": neo4j_modeling_mcp_url or os.environ.get('NEO4J_MODELING_MCP_URL', 'http://localhost:3004/mcp')
         }
         self.session = None
     
@@ -183,14 +185,62 @@ class UniversalMCPClient:
             }
         })
     
-    # Neo4j MCP operations
-    async def neo4j_cypher_query(self, query: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Execute Cypher query on Neo4j"""
-        return await self._make_jsonrpc_call("neo4j", "tools/call", {
-            "name": "cypher_query",
+    # Neo4j Cypher MCP operations
+    async def neo4j_execute_query(self, cypher: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Execute Cypher query on Neo4j using the official Neo4j Cypher MCP server"""
+        return await self._make_jsonrpc_call("neo4j-cypher", "tools/call", {
+            "name": "execute_query",
             "arguments": {
-                "query": query,
+                "cypher": cypher,
                 "parameters": parameters or {}
+            }
+        })
+    
+    async def neo4j_list_nodes(self, label: str = None, limit: int = 100) -> Dict[str, Any]:
+        """List nodes from Neo4j"""
+        cypher = f"MATCH (n{f':{label}' if label else ''}) RETURN n LIMIT {limit}"
+        return await self.neo4j_execute_query(cypher)
+    
+    async def neo4j_list_relationships(self, relationship_type: str = None, limit: int = 100) -> Dict[str, Any]:
+        """List relationships from Neo4j"""
+        cypher = f"MATCH ()-[r{f':{relationship_type}' if relationship_type else ''}]->() RETURN r LIMIT {limit}"
+        return await self.neo4j_execute_query(cypher)
+    
+    async def neo4j_get_schema(self) -> Dict[str, Any]:
+        """Get Neo4j database schema"""
+        cypher = "CALL db.schema.visualization()"
+        return await self.neo4j_execute_query(cypher)
+    
+    # Neo4j Data Modeling MCP operations
+    async def neo4j_create_node(self, label: str, properties: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Create a node in Neo4j using data modeling MCP server"""
+        return await self._make_jsonrpc_call("neo4j-modeling", "tools/call", {
+            "name": "create_node",
+            "arguments": {
+                "label": label,
+                "properties": properties or {}
+            }
+        })
+    
+    async def neo4j_create_relationship(self, from_node: Dict[str, Any], to_node: Dict[str, Any], 
+                                      relationship_type: str, properties: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Create a relationship in Neo4j using data modeling MCP server"""
+        return await self._make_jsonrpc_call("neo4j-modeling", "tools/call", {
+            "name": "create_relationship",
+            "arguments": {
+                "from_node": from_node,
+                "to_node": to_node,
+                "relationship_type": relationship_type,
+                "properties": properties or {}
+            }
+        })
+    
+    async def neo4j_validate_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate Neo4j schema using data modeling MCP server"""
+        return await self._make_jsonrpc_call("neo4j-modeling", "tools/call", {
+            "name": "validate_schema",
+            "arguments": {
+                "schema": schema
             }
         })
     

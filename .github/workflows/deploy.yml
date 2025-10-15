@@ -32,9 +32,12 @@ jobs:
                       - name: docling
                         dockerfile: Dockerfile.docling-library
                         image: knowledgebot-docling-mcp
-                      - name: neo4j
-                        dockerfile: Dockerfile.neo4j-library
-                        image: knowledgebot-neo4j-mcp
+                      - name: neo4j-cypher-mcp
+                        dockerfile: Dockerfile.neo4j-cypher-mcp
+                        image: knowledgebot-neo4j-cypher-mcp
+                      - name: neo4j-modeling-mcp
+                        dockerfile: Dockerfile.neo4j-data-modeling-mcp
+                        image: knowledgebot-neo4j-modeling-mcp
                       - name: pinecone-mcp
                         dockerfile: Dockerfile.pinecone-mcp
                         image: knowledgebot-pinecone-mcp
@@ -61,13 +64,15 @@ jobs:
       run: |
         # Create ECR repositories for all MCP servers
         aws ecr create-repository --repository-name knowledgebot-docling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
-        aws ecr create-repository --repository-name knowledgebot-neo4j-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-neo4j-cypher-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-neo4j-modeling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-dynamodb-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         
         # Set lifecycle policy to keep only latest 10 images
         aws ecr put-lifecycle-policy --repository-name knowledgebot-docling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
-        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-cypher-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-modeling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-dynamodb-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
 
