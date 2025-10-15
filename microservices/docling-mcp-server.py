@@ -39,7 +39,7 @@ class DoclingMCPHandler:
             logger.error(f"Failed to start Docling MCP server: {e}")
             raise
     
-    def _send_mcp_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_mcp_request(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send a JSON-RPC request to the Docling MCP server"""
         if not self.mcp_process:
             raise RuntimeError("MCP server not started")
@@ -68,10 +68,10 @@ class DoclingMCPHandler:
             logger.error(f"Error communicating with MCP server: {e}")
             raise
     
-    def process_document(self, document_bytes: str, filename: str) -> Dict[str, Any]:
+    async def process_document(self, document_bytes: str, filename: str) -> Dict[str, Any]:
         """Process a document using the official Docling MCP server"""
         try:
-            response = self._send_mcp_request("tools/call", {
+            response = await self._send_mcp_request("tools/call", {
                 "name": "process_document",
                 "arguments": {
                     "document_bytes": document_bytes,
@@ -83,10 +83,10 @@ class DoclingMCPHandler:
             logger.error(f"Error processing document: {e}")
             return {"error": str(e)}
     
-    def convert_pdf_to_markdown(self, document_bytes: str, filename: str) -> Dict[str, Any]:
+    async def convert_pdf_to_markdown(self, document_bytes: str, filename: str) -> Dict[str, Any]:
         """Convert PDF to Markdown using the official Docling MCP server"""
         try:
-            response = self._send_mcp_request("tools/call", {
+            response = await self._send_mcp_request("tools/call", {
                 "name": "convert_pdf_to_markdown",
                 "arguments": {
                     "document_bytes": document_bytes,
@@ -98,10 +98,10 @@ class DoclingMCPHandler:
             logger.error(f"Error converting PDF to Markdown: {e}")
             return {"error": str(e)}
     
-    def convert_document_to_json(self, document_bytes: str, filename: str) -> Dict[str, Any]:
+    async def convert_document_to_json(self, document_bytes: str, filename: str) -> Dict[str, Any]:
         """Convert document to structured JSON using the official Docling MCP server"""
         try:
-            response = self._send_mcp_request("tools/call", {
+            response = await self._send_mcp_request("tools/call", {
                 "name": "convert_document_to_json",
                 "arguments": {
                     "document_bytes": document_bytes,
@@ -113,10 +113,10 @@ class DoclingMCPHandler:
             logger.error(f"Error converting document to JSON: {e}")
             return {"error": str(e)}
     
-    def chunk_document(self, document_bytes: str, filename: str, chunk_size: int = 1000) -> Dict[str, Any]:
+    async def chunk_document(self, document_bytes: str, filename: str, chunk_size: int = 1000) -> Dict[str, Any]:
         """Chunk a document using the official Docling MCP server"""
         try:
-            response = self._send_mcp_request("tools/call", {
+            response = await self._send_mcp_request("tools/call", {
                 "name": "chunk_document",
                 "arguments": {
                     "document_bytes": document_bytes,
@@ -129,10 +129,10 @@ class DoclingMCPHandler:
             logger.error(f"Error chunking document: {e}")
             return {"error": str(e)}
     
-    def list_tools(self) -> Dict[str, Any]:
+    async def list_tools(self) -> Dict[str, Any]:
         """List available tools from the Docling MCP server"""
         try:
-            response = self._send_mcp_request("tools/list", {})
+            response = await self._send_mcp_request("tools/list", {})
             return response
         except Exception as e:
             logger.error(f"Error listing tools: {e}")
@@ -150,66 +150,72 @@ handler = DoclingMCPHandler()
 
 def lambda_handler(event, context):
     """
-    AWS Lambda handler for Docling MCP Server
+    AWS Lambda handler for Docling MCP Server (synchronous wrapper)
     """
-    try:
-        # Parse the incoming request
-        if isinstance(event, str):
-            event = json.loads(event)
-        
-        # Extract method and parameters
-        method = event.get("method", "process_document")
-        params = event.get("params", {})
-        
-        # Route to appropriate method
-        if method == "process_document":
-            result = handler.process_document(
-                params.get("document_bytes", ""),
-                params.get("filename", "document.pdf")
-            )
-        elif method == "convert_pdf_to_markdown":
-            result = handler.convert_pdf_to_markdown(
-                params.get("document_bytes", ""),
-                params.get("filename", "document.pdf")
-            )
-        elif method == "convert_document_to_json":
-            result = handler.convert_document_to_json(
-                params.get("document_bytes", ""),
-                params.get("filename", "document.pdf")
-            )
-        elif method == "chunk_document":
-            result = handler.chunk_document(
-                params.get("document_bytes", ""),
-                params.get("filename", "document.pdf"),
-                params.get("chunk_size", 1000)
-            )
-        elif method == "list_tools":
-            result = handler.list_tools()
-        else:
-            result = {"error": f"Unknown method: {method}"}
-        
-        # Return the result
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization"
-            },
-            "body": json.dumps(result)
-        }
-        
-    except Exception as e:
-        logger.error(f"Lambda handler error: {e}")
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({"error": str(e)})
-        }
+    import asyncio
+    
+    async def async_handler():
+        try:
+            # Parse the incoming request
+            if isinstance(event, str):
+                event = json.loads(event)
+            
+            # Extract method and parameters
+            method = event.get("method", "process_document")
+            params = event.get("params", {})
+            
+            # Route to appropriate method
+            if method == "process_document":
+                result = await handler.process_document(
+                    params.get("document_bytes", ""),
+                    params.get("filename", "document.pdf")
+                )
+            elif method == "convert_pdf_to_markdown":
+                result = await handler.convert_pdf_to_markdown(
+                    params.get("document_bytes", ""),
+                    params.get("filename", "document.pdf")
+                )
+            elif method == "convert_document_to_json":
+                result = await handler.convert_document_to_json(
+                    params.get("document_bytes", ""),
+                    params.get("filename", "document.pdf")
+                )
+            elif method == "chunk_document":
+                result = await handler.chunk_document(
+                    params.get("document_bytes", ""),
+                    params.get("filename", "document.pdf"),
+                    params.get("chunk_size", 1000)
+                )
+            elif method == "list_tools":
+                result = await handler.list_tools()
+            else:
+                result = {"error": f"Unknown method: {method}"}
+            
+            # Return the result
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+                },
+                "body": json.dumps(result)
+            }
+            
+        except Exception as e:
+            logger.error(f"Lambda handler error: {e}")
+            return {
+                "statusCode": 500,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                },
+                "body": json.dumps({"error": str(e)})
+            }
+    
+    # Run the async handler
+    return asyncio.run(async_handler())
 
 # For local testing
 if __name__ == "__main__":
