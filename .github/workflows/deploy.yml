@@ -24,8 +24,6 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment: chatbot
-    outputs:
-      ecr-registry: ${{ steps.ecr.outputs.registry }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -105,8 +103,8 @@ jobs:
         file: ./${{ matrix.dockerfile }}
         push: true
         tags: |
-          ${{ needs.setup.outputs.ecr-registry }}/${{ matrix.repository }}:${{ github.sha }}
-          ${{ needs.setup.outputs.ecr-registry }}/${{ matrix.repository }}:latest
+          ${{ env.ECR_REGISTRY }}/${{ matrix.repository }}:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/${{ matrix.repository }}:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
