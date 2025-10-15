@@ -1,15 +1,29 @@
-# Requirements for Docling Library Handler
-# Optimized for Lambda Docker environment
+# Docling MCP Server Requirements
+# Based on docling-project/docling-mcp
 
-# Core Docling dependencies
+# Core MCP dependencies
+mcp>=1.0.0
+asyncio-mqtt>=0.16.0
+
+# Docling dependencies
 docling>=1.0.0
-pypdfium2>=4.0.0
+docling-core>=1.0.0
 
-# Pre-compiled scientific libraries (avoid compilation)
-numpy>=1.24.0,<1.25.0
-scipy>=1.14.1,<2.0.0
-scikit-learn>=1.3.0,<1.4.0
+# Document processing
+pypdf2>=3.0.0
+python-docx>=0.8.11
+python-pptx>=0.6.21
+openpyxl>=3.1.0
+pandas>=2.0.0
 
-# Common dependencies
-boto3>=1.26.0
-botocore>=1.29.0
+# Image processing
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# OCR capabilities
+pytesseract>=0.3.10
+easyocr>=1.7.0
+
+# Additional utilities
+requests>=2.31.0
+aiohttp>=3.8.0

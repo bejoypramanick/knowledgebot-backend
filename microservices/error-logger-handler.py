@@ -27,13 +27,13 @@ dynamodb = boto3.resource('dynamodb')
 s3_client = boto3.client('s3')
 
 # Configuration
-ERROR_LOG_GROUP = os.environ.get('ERROR_LOG_GROUP', '/aws/lambda/error-aggregator')
-ERROR_TABLE = os.environ.get('ERROR_TABLE', 'knowledgebot-error-logs')
-ERROR_BUCKET = os.environ.get('ERROR_BUCKET', 'knowledgebot-error-logs')
+ERROR_LOG_GROUP = '/aws/lambda/error-aggregator'
+ERROR_TABLE = 'knowledgebot-error-logs'
+ERROR_BUCKET = 'knowledgebot-error-logs'
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Centralized error logger handler
+    Centralized error logger handler with comprehensive logging and error handling
     
     Expected event format:
     {
@@ -47,11 +47,34 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         "severity": "ERROR" | "WARNING" | "CRITICAL"
     }
     """
+    start_time = datetime.now()
+    request_id = context.aws_request_id if context else "unknown"
+    
+    logger.info("=== ERROR LOGGER STARTED ===")
+    logger.info(f"📊 Request ID: {request_id}")
+    logger.info(f"📊 Event type: {type(event)}")
+    logger.info(f"📊 Event keys: {list(event.keys()) if isinstance(event, dict) else 'Not a dict'}")
+    logger.info(f"📊 Context: {context}")
+    logger.info(f"📊 Event: {json.dumps(event, default=str, indent=2)}")
+    
     try:
-        logger.info("=== ERROR LOGGER STARTED ===")
-        logger.info(f"📊 Event: {json.dumps(event, default=str, indent=2)}")
+        # Validate event structure
+        if not event or not isinstance(event, dict):
+            processing_time = (datetime.now() - start_time).total_seconds()
+            error_msg = "Event must be a non-empty dictionary"
+            logger.error(f"❌ Validation error: {error_msg}")
+            
+            return {
+                "statusCode": 400,
+                "body": json.dumps({
+                    "success": False,
+                    "error": error_msg,
+                    "request_id": request_id,
+                    "processing_time": processing_time
+                })
+            }
         
-        # Extract error information
+        # Extract error information with validation
         source_lambda = event.get('source_lambda', 'unknown')
         error_type = event.get('error_type', 'UnknownError')
         error_message = event.get('error_message', 'No message provided')
@@ -61,8 +84,49 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         additional_context = event.get('additional_context', {})
         severity = event.get('severity', 'ERROR')
         
+        logger.info(f"📊 Source Lambda: {source_lambda}")
+        logger.info(f"📊 Error Type: {error_type}")
+        logger.info(f"📊 Error Message: {error_message[:200]}{'...' if len(error_message) > 200 else ''}")
+        logger.info(f"📊 Severity: {severity}")
+        logger.info(f"📊 Request ID: {request_id}")
+        logger.info(f"📊 User ID: {user_id}")
+        logger.info(f"📊 Additional Context: {json.dumps(additional_context, default=str)[:200]}{'...' if len(json.dumps(additional_context, default=str)) > 200 else ''}")
+        
+        # Validate severity
+        valid_severities = ['ERROR', 'WARNING', 'CRITICAL', 'INFO']
+        if severity not in valid_severities:
+            processing_time = (datetime.now() - start_time).total_seconds()
+            error_msg = f"Invalid severity: {severity}. Valid severities: {valid_severities}"
+            logger.error(f"❌ Validation error: {error_msg}")
+            
+            return {
+                "statusCode": 400,
+                "body": json.dumps({
+                    "success": False,
+                    "error": error_msg,
+                    "request_id": request_id,
+                    "processing_time": processing_time
+                })
+            }
+        
         # Generate unique error ID
-        error_id = generate_error_id(source_lambda, error_type, error_message, request_id)
+        try:
+            error_id = generate_error_id(source_lambda, error_type, error_message, request_id)
+            logger.info(f"📊 Generated Error ID: {error_id}")
+        except Exception as e:
+            processing_time = (datetime.now() - start_time).total_seconds()
+            error_msg = f"Failed to generate error ID: {str(e)}"
+            logger.error(f"❌ Error ID generation failed: {error_msg}")
+            
+            return {
+                "statusCode": 500,
+                "body": json.dumps({
+                    "success": False,
+                    "error": error_msg,
+                    "request_id": request_id,
+                    "processing_time": processing_time
+                })
+            }
         
         # Create error log entry
         error_log = {
@@ -79,38 +143,75 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'ttl': int(datetime.now().timestamp()) + (30 * 24 * 60 * 60)  # 30 days TTL
         }
         
+        logger.info(f"📊 Error log entry created: {error_id}")
+        
         # Store in DynamoDB for querying
-        store_error_in_dynamodb(error_log)
+        try:
+            dynamodb_success = store_error_in_dynamodb(error_log)
+            if not dynamodb_success:
+                logger.warning(f"⚠️ Failed to store error in DynamoDB: {error_id}")
+        except Exception as e:
+            logger.error(f"❌ Exception storing error in DynamoDB: {e}")
+            logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         
         # Store in CloudWatch Logs for monitoring
-        store_error_in_cloudwatch(error_log)
+        try:
+            cloudwatch_success = store_error_in_cloudwatch(error_log)
+            if not cloudwatch_success:
+                logger.warning(f"⚠️ Failed to store error in CloudWatch: {error_id}")
+        except Exception as e:
+            logger.error(f"❌ Exception storing error in CloudWatch: {e}")
+            logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         
         # Log critical errors prominently in CloudWatch
         if severity == 'CRITICAL':
-            log_critical_error_to_cloudwatch(error_log)
-            # Optionally store in S3 for long-term storage
-            store_error_in_s3(error_log)
+            try:
+                logger.info(f"🚨 Processing CRITICAL error: {error_id}")
+                critical_success = log_critical_error_to_cloudwatch(error_log)
+                if not critical_success:
+                    logger.warning(f"⚠️ Failed to log critical error to CloudWatch: {error_id}")
+                
+                # Store in S3 for long-term storage
+                s3_success = store_error_in_s3(error_log)
+                if not s3_success:
+                    logger.warning(f"⚠️ Failed to store critical error in S3: {error_id}")
+            except Exception as e:
+                logger.error(f"❌ Exception processing critical error: {e}")
+                logger.error(f"📊 Stack trace: {traceback.format_exc()}")
         
+        processing_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"✅ Error logged successfully: {error_id}")
+        logger.info(f"📊 Processing time: {processing_time:.3f}s")
+        logger.info(f"📊 Severity: {severity}")
         
         return {
             "statusCode": 200,
             "body": json.dumps({
                 "success": True,
                 "error_id": error_id,
-                "message": "Error logged successfully"
+                "message": "Error logged successfully",
+                "request_id": request_id,
+                "processing_time": processing_time
             })
         }
         
     except Exception as e:
+        processing_time = (datetime.now() - start_time).total_seconds()
         logger.error(f"❌ Error in error logger: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Error args: {e.args}")
         logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
         
         return {
             "statusCode": 500,
             "body": json.dumps({
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "request_id": request_id,
+                "processing_time": processing_time,
+                "timestamp": datetime.now().isoformat()
             })
         }
 
@@ -273,7 +374,7 @@ def log_error(source_lambda: str, error: Exception, context: Any = None,
         # Invoke error logger Lambda
         lambda_client = boto3.client('lambda')
         response = lambda_client.invoke(
-            FunctionName=os.environ.get('ERROR_LOGGER_FUNCTION', 'error-logger-handler'),
+            FunctionName='error-logger-handler',
             InvocationType='Event',  # Async invocation
             Payload=json.dumps(error_data)
         )

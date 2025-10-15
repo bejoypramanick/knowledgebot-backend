@@ -77,19 +77,20 @@ def send_websocket_message(connection_id: str, message: Dict[str, Any], endpoint
         logger.error(f"❌ Failed to send WebSocket message: {e}")
         return False
 
-def call_sentence_transformer_library(texts: List[str]) -> List[List[float]]:
-    """Call Sentence Transformer library Lambda for query embeddings"""
+def call_pinecone_for_embeddings(texts: List[str]) -> List[List[float]]:
+    """Call Pinecone MCP server for query embeddings"""
     try:
-        logger.info(f"🔧 Calling Sentence Transformer library for query embedding")
+        logger.info(f"🔧 Calling Pinecone MCP server for query embedding")
         
         payload = {
+            'operation_type': 'generate_embeddings',
             'texts': texts
         }
         
-        st_function_name = os.environ.get('SENTENCE_TRANSFORMER_LIBRARY_FUNCTION', 'sentence-transformer-library-handler')
+        pinecone_function_name = os.environ.get('PINECONE_LIBRARY_FUNCTION', 'pinecone-library-handler')
         
         response = lambda_client.invoke(
-            FunctionName=st_function_name,
+            FunctionName=pinecone_function_name,
             InvocationType='RequestResponse',
             Payload=json.dumps(payload)
         )
@@ -97,25 +98,25 @@ def call_sentence_transformer_library(texts: List[str]) -> List[List[float]]:
         result = json.loads(response['Payload'].read())
         
         if result.get('statusCode') == 200:
-            st_result = json.loads(result['body'])
-            if st_result.get('success'):
-                logger.info(f"✅ Sentence Transformer library generated {len(st_result['embeddings'])} embeddings")
-                return st_result['embeddings']
+            pinecone_result = json.loads(result['body'])
+            if pinecone_result.get('success'):
+                logger.info(f"✅ Pinecone MCP server generated {len(pinecone_result['embeddings'])} embeddings")
+                return pinecone_result['embeddings']
             else:
-                logger.error(f"❌ Sentence Transformer library failed: {st_result.get('error')}")
-                raise Exception(f"Sentence Transformer failed: {st_result.get('error')}")
+                logger.error(f"❌ Pinecone MCP server failed: {pinecone_result.get('error')}")
+                raise Exception(f"Pinecone MCP server failed: {pinecone_result.get('error')}")
         else:
-            logger.error(f"❌ Sentence Transformer library Lambda call failed: {result}")
-            raise Exception(f"Sentence Transformer Lambda call failed: {result}")
+            logger.error(f"❌ Pinecone MCP server Lambda call failed: {result}")
+            raise Exception(f"Pinecone MCP server Lambda call failed: {result}")
             
     except Exception as e:
-        logger.error(f"❌ Error calling Sentence Transformer library: {e}")
+        logger.error(f"❌ Error calling Pinecone MCP server: {e}")
         raise
 
-def call_openai_library(messages: List[Dict[str, str]]) -> str:
-    """Call OpenAI library Lambda for response generation"""
+def call_openai_mcp_server(messages: List[Dict[str, str]]) -> str:
+    """Call OpenAI MCP server for response generation"""
     try:
-        logger.info(f"🤖 Calling OpenAI library for response generation")
+        logger.info(f"🤖 Calling OpenAI MCP server for response generation")
         
         payload = {
             'operation_type': 'chat',
@@ -125,7 +126,7 @@ def call_openai_library(messages: List[Dict[str, str]]) -> str:
             'temperature': 0.7
         }
         
-        openai_function_name = os.environ.get('OPENAI_LIBRARY_FUNCTION', 'openai-library-handler')
+        openai_function_name = os.environ.get('OPENAI_AGENTS_FUNCTION', 'openai-mcp-server')
         
         response = lambda_client.invoke(
             FunctionName=openai_function_name,
@@ -138,20 +139,20 @@ def call_openai_library(messages: List[Dict[str, str]]) -> str:
         if result.get('statusCode') == 200:
             openai_result = json.loads(result['body'])
             if openai_result.get('success'):
-                logger.info(f"✅ OpenAI library generated response")
+                logger.info(f"✅ OpenAI MCP server generated response")
                 return openai_result['response']
             else:
-                logger.error(f"❌ OpenAI library failed: {openai_result.get('error')}")
-                raise Exception(f"OpenAI failed: {openai_result.get('error')}")
+                logger.error(f"❌ OpenAI MCP server failed: {openai_result.get('error')}")
+                raise Exception(f"OpenAI MCP server failed: {openai_result.get('error')}")
         else:
-            logger.error(f"❌ OpenAI library Lambda call failed: {result}")
-            raise Exception(f"OpenAI Lambda call failed: {result}")
+            logger.error(f"❌ OpenAI MCP server Lambda call failed: {result}")
+            raise Exception(f"OpenAI MCP server Lambda call failed: {result}")
             
     except Exception as e:
-        logger.error(f"❌ Error calling OpenAI library: {e}")
+        logger.error(f"❌ Error calling OpenAI MCP server: {e}")
         raise
 
-def perform_rag_search(query: str, limit: int = 5) -> Dict[str, Any]:
+def perform_rag_search(query: str, limit: int = 5, connection_id: str = None, endpoint_url: str = None) -> Dict[str, Any]:
     """Perform RAG search with fallbacks and timeout handling"""
     try:
         logger.info(f"🔍 Starting RAG search for query: {query[:50]}...")
@@ -170,53 +171,218 @@ def perform_rag_search(query: str, limit: int = 5) -> Dict[str, Any]:
             # Step 1: Generate query embedding (with fallback and timeout)
             try:
                 logger.info("🧠 Step 1: Generating query embedding")
+                
+                # Send progress update
+                if connection_id and endpoint_url:
+                    progress_message = {
+                        "type": "progress",
+                        "message": "🧠 Generating query embeddings...",
+                        "phase": "embedding_generation",
+                        "status": "in_progress",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    send_websocket_message(connection_id, progress_message, endpoint_url)
+                
                 # Use shorter timeout for embedding generation
                 signal.signal(signal.SIGALRM, timeout_handler)
                 signal.alarm(EMBEDDING_TIMEOUT)
-                query_embedding = call_sentence_transformer_library([query])
+                query_embedding = call_pinecone_for_embeddings([query])
                 signal.alarm(0)  # Cancel embedding timeout
                 logger.info("✅ Query embedding generated successfully")
+                
+                # Send success update
+                if connection_id and endpoint_url:
+                    progress_message = {
+                        "type": "progress",
+                        "message": "✅ Query embeddings generated successfully",
+                        "phase": "embedding_generation",
+                        "status": "completed",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    send_websocket_message(connection_id, progress_message, endpoint_url)
+                    
             except TimeoutError:
                 logger.warning("⏰ Embedding generation timed out, continuing without embeddings")
                 signal.alarm(0)  # Cancel embedding timeout
                 query_embedding = None
+                
+                # Send timeout error update
+                if connection_id and endpoint_url:
+                    error_message = {
+                        "type": "error",
+                        "message": "⏰ Embedding generation timed out",
+                        "phase": "embedding_generation",
+                        "status": "timeout",
+                        "timestamp": datetime.now().isoformat(),
+                        "dismissible": True
+                    }
+                    send_websocket_message(connection_id, error_message, endpoint_url)
+                    
             except Exception as e:
-                logger.warning(f"⚠️ Sentence Transformer failed: {e}, continuing without embeddings")
+                logger.warning(f"⚠️ Embedding generation failed: {e}, continuing without embeddings")
                 signal.alarm(0)  # Cancel embedding timeout
                 query_embedding = None
+                
+                # Send error update
+                if connection_id and endpoint_url:
+                    error_message = {
+                        "type": "error",
+                        "message": f"⚠️ Embedding generation failed: {str(e)}",
+                        "phase": "embedding_generation",
+                        "status": "failed",
+                        "timestamp": datetime.now().isoformat(),
+                        "dismissible": True
+                    }
+                    send_websocket_message(connection_id, error_message, endpoint_url)
         
             # Step 2: Search Pinecone for similar chunks (with fallback)
             try:
                 if query_embedding:
                     logger.info("🔍 Step 2: Searching Pinecone for similar chunks")
+                    
+                    # Send progress update
+                    if connection_id and endpoint_url:
+                        progress_message = {
+                            "type": "progress",
+                            "message": "🔍 Searching vector database (Pinecone)...",
+                            "phase": "vector_search",
+                            "status": "in_progress",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        send_websocket_message(connection_id, progress_message, endpoint_url)
+                    
                     # Call Pinecone library (simplified for this example)
                     pinecone_result = {"results": []}  # Placeholder
                     logger.info(f"✅ Pinecone search completed: {len(pinecone_result.get('results', []))} results")
+                    
+                    # Send success update
+                    if connection_id and endpoint_url:
+                        progress_message = {
+                            "type": "progress",
+                            "message": f"✅ Found {len(pinecone_result.get('results', []))} similar chunks in vector database",
+                            "phase": "vector_search",
+                            "status": "completed",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        send_websocket_message(connection_id, progress_message, endpoint_url)
                 else:
                     logger.warning("⚠️ Skipping Pinecone search - no embeddings available")
+                    
+                    # Send skip update
+                    if connection_id and endpoint_url:
+                        progress_message = {
+                            "type": "progress",
+                            "message": "⚠️ Skipping vector search - no embeddings available",
+                            "phase": "vector_search",
+                            "status": "skipped",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        send_websocket_message(connection_id, progress_message, endpoint_url)
             except Exception as e:
                 logger.warning(f"⚠️ Pinecone search failed: {e}, continuing without vector results")
                 pinecone_result = {"results": []}
+                
+                # Send error update
+                if connection_id and endpoint_url:
+                    error_message = {
+                        "type": "error",
+                        "message": f"⚠️ Vector search failed: {str(e)}",
+                        "phase": "vector_search",
+                        "status": "failed",
+                        "timestamp": datetime.now().isoformat(),
+                        "dismissible": True
+                    }
+                    send_websocket_message(connection_id, error_message, endpoint_url)
             
             # Step 3: Search Neo4j for related documents (with fallback)
             try:
                 logger.info("🕸️ Step 3: Searching Neo4j for related documents")
+                
+                # Send progress update
+                if connection_id and endpoint_url:
+                    progress_message = {
+                        "type": "progress",
+                        "message": "🕸️ Searching knowledge graph (Neo4j)...",
+                        "phase": "graph_search",
+                        "status": "in_progress",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    send_websocket_message(connection_id, progress_message, endpoint_url)
+                
                 # Call Neo4j library (simplified for this example)
                 neo4j_result = {"records": []}  # Placeholder
                 logger.info(f"✅ Neo4j search completed: {len(neo4j_result.get('records', []))} results")
+                
+                # Send success update
+                if connection_id and endpoint_url:
+                    progress_message = {
+                        "type": "progress",
+                        "message": f"✅ Found {len(neo4j_result.get('records', []))} related documents in knowledge graph",
+                        "phase": "graph_search",
+                        "status": "completed",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    send_websocket_message(connection_id, progress_message, endpoint_url)
             except Exception as e:
                 logger.warning(f"⚠️ Neo4j search failed: {e}, continuing without graph results")
                 neo4j_result = {"records": []}
+                
+                # Send error update
+                if connection_id and endpoint_url:
+                    error_message = {
+                        "type": "error",
+                        "message": f"⚠️ Knowledge graph search failed: {str(e)}",
+                        "phase": "graph_search",
+                        "status": "failed",
+                        "timestamp": datetime.now().isoformat(),
+                        "dismissible": True
+                    }
+                    send_websocket_message(connection_id, error_message, endpoint_url)
             
             # Step 4: Search DynamoDB for additional context (with fallback)
             try:
                 logger.info("💾 Step 4: Searching DynamoDB for additional context")
+                
+                # Send progress update
+                if connection_id and endpoint_url:
+                    progress_message = {
+                        "type": "progress",
+                        "message": "💾 Fetching document chunks from database...",
+                        "phase": "database_search",
+                        "status": "in_progress",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    send_websocket_message(connection_id, progress_message, endpoint_url)
+                
                 # Call DynamoDB search (simplified for this example)
                 dynamodb_chunks = []  # Placeholder
                 logger.info(f"✅ DynamoDB search completed: {len(dynamodb_chunks)} results")
+                
+                # Send success update
+                if connection_id and endpoint_url:
+                    progress_message = {
+                        "type": "progress",
+                        "message": f"✅ Retrieved {len(dynamodb_chunks)} document chunks from database",
+                        "phase": "database_search",
+                        "status": "completed",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    send_websocket_message(connection_id, progress_message, endpoint_url)
             except Exception as e:
                 logger.warning(f"⚠️ DynamoDB search failed: {e}, continuing without DynamoDB results")
                 dynamodb_chunks = []
+                
+                # Send error update
+                if connection_id and endpoint_url:
+                    error_message = {
+                        "type": "error",
+                        "message": f"⚠️ Database search failed: {str(e)}",
+                        "phase": "database_search",
+                        "status": "failed",
+                        "timestamp": datetime.now().isoformat(),
+                        "dismissible": True
+                    }
+                    send_websocket_message(connection_id, error_message, endpoint_url)
         
             # Combine results
             total_results = len(pinecone_result.get('results', [])) + len(neo4j_result.get('records', [])) + len(dynamodb_chunks)
@@ -324,25 +490,31 @@ async def generate_chat_response_async(query: str, conversation_history: List[Di
             progress_message = {
                 "type": "progress",
                 "message": "🔍 Searching knowledge base...",
+                "phase": "rag_search",
+                "status": "starting",
                 "timestamp": datetime.now().isoformat()
             }
             send_websocket_message(connection_id, progress_message, endpoint_url)
         
         # Step 1: Perform RAG search
         logger.info("🔍 Step 1: Performing RAG search")
-        rag_results = perform_rag_search(query, limit=5)
+        rag_results = perform_rag_search(query, limit=5, connection_id=connection_id, endpoint_url=endpoint_url)
         
         if connection_id and endpoint_url:
             if rag_results.get('success'):
                 progress_message = {
                     "type": "progress",
-                    "message": "✅ Found relevant information, generating response...",
+                    "message": "🤖 Generating AI response with retrieved context...",
+                    "phase": "response_generation",
+                    "status": "in_progress",
                     "timestamp": datetime.now().isoformat()
                 }
             else:
                 progress_message = {
                     "type": "progress",
-                    "message": "⚠️ Knowledge base search failed, using general knowledge...",
+                    "message": "🤖 Generating AI response with general knowledge...",
+                    "phase": "response_generation",
+                    "status": "in_progress",
                     "timestamp": datetime.now().isoformat()
                 }
             send_websocket_message(connection_id, progress_message, endpoint_url)
@@ -364,7 +536,7 @@ async def generate_chat_response_async(query: str, conversation_history: List[Di
                 })
                 
                 logger.info("🤖 Calling OpenAI directly as RAG fallback")
-                openai_response = call_openai_library(messages)
+                openai_response = call_openai_mcp_server(messages)
                 
                 return {
                     "success": True,
@@ -420,7 +592,7 @@ async def generate_chat_response_async(query: str, conversation_history: List[Di
                 })
                 
                 logger.info("🤖 Calling OpenAI to supplement limited RAG results")
-                openai_response = call_openai_library(messages)
+                openai_response = call_openai_mcp_server(messages)
                 
                 # Combine RAG results with OpenAI response
                 rag_context = ""
@@ -487,7 +659,7 @@ async def generate_chat_response_async(query: str, conversation_history: List[Di
         })
         
         logger.info("🤖 Calling OpenAI with RAG context")
-        openai_response = call_openai_library(messages)
+        openai_response = call_openai_mcp_server(messages)
         
         return {
             "success": True,
@@ -516,7 +688,7 @@ async def generate_chat_response_async(query: str, conversation_history: List[Di
             }
         }
 
-def generate_chat_response_with_progress(query: str, conversation_history: List[Dict[str, Any]] = None, progress_callback = None) -> Dict[str, Any]:
+def generate_chat_response_with_progress(query: str, conversation_history: List[Dict[str, Any]] = None, progress_callback = None, connection_id: str = None, endpoint_url: str = None) -> Dict[str, Any]:
     """Generate chat response with progress updates"""
     try:
         logger.info(f"💬 Generating chat response for query: {query[:50]}...")
@@ -526,7 +698,7 @@ def generate_chat_response_with_progress(query: str, conversation_history: List[
         
         # Step 1: Perform RAG search
         logger.info("🔍 Step 1: Performing RAG search")
-        rag_results = perform_rag_search(query, limit=5)
+        rag_results = perform_rag_search(query, limit=5, connection_id=connection_id, endpoint_url=endpoint_url)
         
         if progress_callback:
             if rag_results.get('success'):
@@ -551,7 +723,7 @@ def generate_chat_response_with_progress(query: str, conversation_history: List[
                 })
                 
                 logger.info("🤖 Calling OpenAI directly as RAG fallback")
-                openai_response = call_openai_library(messages)
+                openai_response = call_openai_mcp_server(messages)
                 
                 return {
                     "success": True,
@@ -602,7 +774,7 @@ def generate_chat_response_with_progress(query: str, conversation_history: List[
                 })
                 
                 logger.info("🤖 Calling OpenAI to supplement limited RAG results")
-                openai_response = call_openai_library(messages)
+                openai_response = call_openai_mcp_server(messages)
                 
                 # Combine RAG results with OpenAI response
                 rag_context = ""
@@ -664,7 +836,7 @@ def generate_chat_response_with_progress(query: str, conversation_history: List[
         })
         
         logger.info("🤖 Calling OpenAI with RAG context")
-        openai_response = call_openai_library(messages)
+        openai_response = call_openai_mcp_server(messages)
         
         return {
             "success": True,
@@ -693,14 +865,14 @@ def generate_chat_response_with_progress(query: str, conversation_history: List[
             }
         }
 
-def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]] = None, connection_id: str = None, endpoint_url: str = None) -> Dict[str, Any]:
     """Generate chat response using RAG and OpenAI with fallbacks"""
     try:
         logger.info(f"💬 Generating chat response for query: {query[:50]}...")
         
         # Step 1: Perform RAG search
         logger.info("🔍 Step 1: Performing RAG search")
-        rag_results = perform_rag_search(query, limit=5)
+        rag_results = perform_rag_search(query, limit=5, connection_id=connection_id, endpoint_url=endpoint_url)
         
         # Handle RAG search results (even if some services failed)
         if not rag_results.get('success'):
@@ -719,7 +891,7 @@ def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]
                 })
                 
                 logger.info("🤖 Calling OpenAI directly as RAG fallback")
-                openai_response = call_openai_library(messages)
+                openai_response = call_openai_mcp_server(messages)
                 
                 return {
                     "success": True,
@@ -767,7 +939,7 @@ def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]
                 })
                 
                 logger.info("🤖 Calling OpenAI to supplement limited RAG results")
-                openai_response = call_openai_library(messages)
+                openai_response = call_openai_mcp_server(messages)
                 
                 # Combine RAG results with OpenAI response
                 rag_context = ""
@@ -804,7 +976,7 @@ def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]
             
             messages.append({"role": "user", "content": query})
             
-            openai_response = call_openai_library(messages)
+            openai_response = call_openai_mcp_server(messages)
             
             return {
                 "success": True,
@@ -848,128 +1020,288 @@ def generate_chat_response(query: str, conversation_history: List[Dict[str, Any]
         }
 
 def lambda_handler(event, context):
-    """WebSocket Lambda handler for real-time chat"""
+    """WebSocket Lambda handler for real-time chat with comprehensive logging and error handling"""
+    start_time = datetime.now()
+    request_id = context.aws_request_id if context else "unknown"
+    
     logger.info("=== WEBSOCKET CHAT ORCHESTRATOR STARTED ===")
-    logger.info(f"📊 Event: {json.dumps(event, default=str, indent=2)}")
+    logger.info(f"📊 Request ID: {request_id}")
+    logger.info(f"📊 Event type: {type(event)}")
+    logger.info(f"📊 Event keys: {list(event.keys()) if isinstance(event, dict) else 'Not a dict'}")
+    logger.info(f"📊 Context: {context}")
+    logger.info(f"📊 Event details: {json.dumps(event, default=str, indent=2)}")
     
     # No artificial WebSocket timeout - let individual services handle their own timeouts
     
     try:
         # Extract WebSocket information
+        logger.info("📊 Extracting WebSocket information...")
         connection_id = event.get('requestContext', {}).get('connectionId')
         route_key = event.get('requestContext', {}).get('routeKey')
         domain_name = event.get('requestContext', {}).get('domainName')
         endpoint_url = f"https://{domain_name}" if domain_name else None
         
+        logger.info(f"📊 Connection ID: {connection_id}")
+        logger.info(f"📊 Route Key: {route_key}")
+        logger.info(f"📊 Domain Name: {domain_name}")
+        logger.info(f"📊 Endpoint URL: {endpoint_url}")
+        
         if not connection_id:
             logger.error("❌ No connection ID found in event")
-            return {"statusCode": 400, "body": "Missing connection ID"}
-        
-        logger.info(f"🔌 Connection ID: {connection_id}")
-        logger.info(f"🛣️ Route Key: {route_key}")
+            log_custom_error(
+                'chat-orchestrator-websocket',
+                'Missing connection ID in WebSocket event',
+                {
+                    'request_id': request_id,
+                    'event_keys': list(event.keys()) if event else [],
+                    'processing_time': (datetime.now() - start_time).total_seconds()
+                },
+                'ERROR'
+            )
+            return {
+                "statusCode": 400, 
+                "body": "Missing connection ID",
+                "request_id": request_id,
+                "processing_time": (datetime.now() - start_time).total_seconds()
+            }
         
         # Handle different WebSocket events
+        logger.info(f"📊 Processing route key: {route_key}")
+        
         if route_key == "$connect":
             logger.info("🔌 WebSocket connection established")
-            return {"statusCode": 200, "body": "Connected"}
+            processing_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"📊 Connection processing time: {processing_time:.3f}s")
+            return {
+                "statusCode": 200, 
+                "body": "Connected",
+                "request_id": request_id,
+                "processing_time": processing_time
+            }
         
         elif route_key == "$disconnect":
             logger.info("🔌 WebSocket connection closed")
-            return {"statusCode": 200, "body": "Disconnected"}
+            processing_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"📊 Disconnection processing time: {processing_time:.3f}s")
+            return {
+                "statusCode": 200, 
+                "body": "Disconnected",
+                "request_id": request_id,
+                "processing_time": processing_time
+            }
         
         elif route_key in ["message", "$default"]:
             # Handle chat message
+            logger.info("💬 Processing chat message...")
             try:
-                body = json.loads(event.get('body', '{}'))
+                # Parse request body
+                logger.info("📊 Parsing request body...")
+                body_str = event.get('body', '{}')
+                logger.info(f"📊 Raw body: {body_str}")
+                
+                try:
+                    body = json.loads(body_str)
+                    logger.info(f"📊 Parsed body keys: {list(body.keys()) if isinstance(body, dict) else 'Not a dict'}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"❌ JSON decode error: {e}")
+                    log_custom_error(
+                        'chat-orchestrator-websocket',
+                        f"Invalid JSON in request body: {e}",
+                        {
+                            'request_id': request_id,
+                            'raw_body': body_str,
+                            'processing_time': (datetime.now() - start_time).total_seconds()
+                        },
+                        'WARNING'
+                    )
+                    body = {}
+                
                 query = body.get('query', '') or body.get('message', '')
                 conversation_history = body.get('conversation_history', [])
                 
+                logger.info(f"📊 Query length: {len(query)}")
+                logger.info(f"📊 Conversation history length: {len(conversation_history)}")
+                
                 if not query:
+                    logger.warning("⚠️ No query provided in request")
                     error_message = {
                         "type": "error",
                         "message": "No query provided",
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
+                        "request_id": request_id
                     }
                     send_websocket_message(connection_id, error_message, endpoint_url)
-                    return {"statusCode": 400, "body": "No query provided"}
+                    processing_time = (datetime.now() - start_time).total_seconds()
+                    return {
+                        "statusCode": 400, 
+                        "body": "No query provided",
+                        "request_id": request_id,
+                        "processing_time": processing_time
+                    }
                 
                 logger.info(f"💬 Processing WebSocket chat query: {query[:100]}...")
                 
                 # Send initial typing indicator
+                logger.info("📊 Sending typing indicator...")
                 typing_message = {
                     "type": "typing",
                     "message": "Thinking...",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "request_id": request_id
                 }
-                send_websocket_message(connection_id, typing_message, endpoint_url)
+                typing_sent = send_websocket_message(connection_id, typing_message, endpoint_url)
+                logger.info(f"📊 Typing indicator sent: {typing_sent}")
                 
                 # Send progress updates during processing
                 def send_progress_update(message: str):
+                    logger.info(f"📊 Sending progress update: {message}")
                     progress_message = {
                         "type": "progress",
                         "message": message,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
+                        "request_id": request_id
                     }
-                    send_websocket_message(connection_id, progress_message, endpoint_url)
+                    return send_websocket_message(connection_id, progress_message, endpoint_url)
                 
                 # Send immediate acknowledgment to avoid API Gateway timeout
+                logger.info("📊 Sending acknowledgment...")
                 ack_message = {
                     "type": "acknowledgment",
                     "message": "Message received, processing...",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "request_id": request_id
                 }
-                send_websocket_message(connection_id, ack_message, endpoint_url)
+                ack_sent = send_websocket_message(connection_id, ack_message, endpoint_url)
+                logger.info(f"📊 Acknowledgment sent: {ack_sent}")
                 
                 # Process asynchronously to avoid API Gateway 30-second timeout
-                # This will run in the background and send results when ready
+                logger.info("📊 Starting async message processing...")
                 asyncio.create_task(process_message_async(query, conversation_history, connection_id, endpoint_url))
                 
-                return {"statusCode": 200, "body": "Message acknowledged, processing asynchronously"}
+                processing_time = (datetime.now() - start_time).total_seconds()
+                logger.info(f"📊 Message processing initiated in {processing_time:.3f}s")
+                
+                return {
+                    "statusCode": 200, 
+                    "body": "Message acknowledged, processing asynchronously",
+                    "request_id": request_id,
+                    "processing_time": processing_time
+                }
                 
             except TimeoutError:
-                logger.warning("⏰ A service timed out during message processing")
+                processing_time = (datetime.now() - start_time).total_seconds()
+                logger.warning(f"⏰ A service timed out during message processing after {processing_time:.3f}s")
                 
                 # Log timeout error
                 log_timeout_error(
                     'chat-orchestrator-websocket',
                     'message_processing',
                     context,
-                    {'connection_id': connection_id, 'query': query[:100]}
+                    {
+                        'request_id': request_id,
+                        'connection_id': connection_id, 
+                        'query': query[:100] if 'query' in locals() else 'unknown',
+                        'processing_time': processing_time
+                    }
                 )
                 
                 error_message = {
                     "type": "error",
                     "message": "One of our services is taking longer than expected. I'll try to respond with what I can, but you might want to try rephrasing your question.",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "request_id": request_id
                 }
                 send_websocket_message(connection_id, error_message, endpoint_url)
-                return {"statusCode": 200, "body": "Service timeout handled"}
+                return {
+                    "statusCode": 200, 
+                    "body": "Service timeout handled",
+                    "request_id": request_id,
+                    "processing_time": processing_time
+                }
                 
             except Exception as e:
+                processing_time = (datetime.now() - start_time).total_seconds()
                 logger.error(f"❌ Error processing WebSocket message: {e}")
+                logger.error(f"📊 Error type: {type(e).__name__}")
+                logger.error(f"📊 Error args: {e.args}")
+                logger.error(f"📊 Stack trace: {traceback.format_exc()}")
                 
                 # Log general error
                 log_error(
                     'chat-orchestrator-websocket',
                     e,
                     context,
-                    {'connection_id': connection_id, 'query': query[:100]},
+                    {
+                        'request_id': request_id,
+                        'connection_id': connection_id, 
+                        'query': query[:100] if 'query' in locals() else 'unknown',
+                        'processing_time': processing_time,
+                        'error_type': 'MessageProcessingError'
+                    },
                     'ERROR'
                 )
                 
                 error_message = {
                     "type": "error",
                     "message": f"Error processing message: {str(e)}",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "request_id": request_id
                 }
                 send_websocket_message(connection_id, error_message, endpoint_url)
-                return {"statusCode": 500, "body": "Error processing message"}
+                return {
+                    "statusCode": 500, 
+                    "body": "Error processing message",
+                    "request_id": request_id,
+                    "processing_time": processing_time
+                }
         
         else:
+            processing_time = (datetime.now() - start_time).total_seconds()
             logger.warning(f"⚠️ Unknown route key: {route_key}")
-            return {"statusCode": 400, "body": "Unknown route"}
+            log_custom_error(
+                'chat-orchestrator-websocket',
+                f"Unknown route key: {route_key}",
+                {
+                    'request_id': request_id,
+                    'route_key': route_key,
+                    'connection_id': connection_id,
+                    'processing_time': processing_time
+                },
+                'WARNING'
+            )
+            return {
+                "statusCode": 400, 
+                "body": "Unknown route",
+                "request_id": request_id,
+                "processing_time": processing_time
+            }
         
     except Exception as e:
+        processing_time = (datetime.now() - start_time).total_seconds()
         logger.error(f"💥 CRITICAL ERROR in WebSocket handler: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Error args: {e.args}")
         logger.error(f"📊 Stack trace: {traceback.format_exc()}")
-        return {"statusCode": 500, "body": "Internal server error"}
+        logger.error(f"📊 Event that caused error: {json.dumps(event, default=str, indent=2)}")
+        
+        # Log critical error
+        log_error(
+            'chat-orchestrator-websocket',
+            e,
+            context,
+            {
+                'request_id': request_id,
+                'event_keys': list(event.keys()) if event else [],
+                'processing_time': processing_time,
+                'error_type': 'CriticalHandlerError'
+            },
+            'CRITICAL'
+        )
+        
+        return {
+            "statusCode": 500, 
+            "body": "Internal server error",
+            "request_id": request_id,
+            "processing_time": processing_time,
+            "timestamp": datetime.now().isoformat()
+        }

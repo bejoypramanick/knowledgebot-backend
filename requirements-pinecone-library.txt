@@ -1,9 +1,17 @@
-# Requirements for Pinecone Library Handler
-# Optimized for Lambda Docker environment
+# Pinecone MCP Server Requirements
+# Based on pinecone-io/pinecone-mcp
 
-# Pinecone client (updated package name)
-pinecone>=5.0.0
+# Core MCP dependencies
+mcp>=1.0.0
+asyncio-mqtt>=0.16.0
 
-# Common dependencies
-boto3>=1.26.0
-botocore>=1.29.0
+# Pinecone dependencies
+pinecone-client>=3.0.0
+
+# Vector operations
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Additional utilities
+requests>=2.31.0
+aiohttp>=3.8.0

@@ -14,6 +14,9 @@ neo4j>=5.0.0
 # OpenAI Library Handler
 openai>=1.0.0
 
+# OpenAI Agents SDK
+openai-agents>=0.1.0
+
 # Sentence Transformer Library Handler
 sentence-transformers>=2.2.0
 torch>=2.0.0

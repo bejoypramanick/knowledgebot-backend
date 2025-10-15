@@ -46,33 +46,151 @@ dynamodb = boto3.resource('dynamodb')
 lambda_client = boto3.client('lambda')
 
 def download_from_s3(bucket: str, key: str) -> bytes:
-    """Download file from S3"""
+    """Download file from S3 with comprehensive error handling and logging"""
+    start_time = datetime.now()
+    
     try:
-        logger.info(f"📥 Downloading document from S3: s3://{bucket}/{key}")
+        logger.info(f"📥 Starting S3 download: s3://{bucket}/{key}")
         logger.info(f"📊 Bucket: {bucket}")
         logger.info(f"📊 Key: {key}")
         
-        response = s3_client.get_object(Bucket=bucket, Key=key)
-        logger.info(f"📊 S3 response metadata: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
-        logger.info(f"📊 Content length: {response.get('ContentLength', 'Unknown')}")
-        logger.info(f"📊 Content type: {response.get('ContentType', 'Unknown')}")
+        # Validate input parameters
+        if not bucket or not isinstance(bucket, str):
+            raise ValueError("Bucket name must be a non-empty string")
+        if not key or not isinstance(key, str):
+            raise ValueError("S3 key must be a non-empty string")
         
-        document_bytes = response['Body'].read()
+        # Check if object exists first (optimization)
+        try:
+            head_response = s3_client.head_object(Bucket=bucket, Key=key)
+            content_length = head_response.get('ContentLength', 0)
+            content_type = head_response.get('ContentType', 'unknown')
+            last_modified = head_response.get('LastModified')
+            
+            logger.info(f"📊 Object exists - Size: {content_length} bytes, Type: {content_type}")
+            logger.info(f"📊 Last modified: {last_modified}")
+            
+            # Check file size limits (prevent memory issues)
+            MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB limit
+            if content_length > MAX_FILE_SIZE:
+                raise ValueError(f"File too large: {content_length} bytes (max: {MAX_FILE_SIZE})")
+                
+        except s3_client.exceptions.NoSuchKey:
+            logger.error(f"❌ S3 object not found: s3://{bucket}/{key}")
+            raise Exception(f"S3 object not found: s3://{bucket}/{key}")
+        except s3_client.exceptions.NoSuchBucket:
+            logger.error(f"❌ S3 bucket not found: {bucket}")
+            raise Exception(f"S3 bucket not found: {bucket}")
+        
+        # Download the object
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        logger.info(f"📊 S3 response status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
+        
+        # Read content in chunks for large files (memory optimization)
+        document_bytes = b''
+        content_stream = response['Body']
+        
+        # Read in 1MB chunks
+        chunk_size = 1024 * 1024
+        while True:
+            chunk = content_stream.read(chunk_size)
+            if not chunk:
+                break
+            document_bytes += chunk
+            
+            # Log progress for large files
+            if len(document_bytes) % (10 * chunk_size) == 0:  # Every 10MB
+                logger.info(f"📊 Downloaded {len(document_bytes)} bytes so far...")
+        
+        processing_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"✅ Successfully downloaded {len(document_bytes)} bytes from S3")
+        logger.info(f"📊 Download time: {processing_time:.3f}s")
+        logger.info(f"📊 Download speed: {len(document_bytes) / processing_time / 1024 / 1024:.2f} MB/s")
+        
+        # Log success to centralized error logger
+        log_custom_error(
+            'document-processor-business-logic',
+            's3_download_success',
+            {
+                'bucket': bucket,
+                'key': key,
+                'file_size': len(document_bytes),
+                'processing_time': processing_time,
+                'download_speed_mbps': len(document_bytes) / processing_time / 1024 / 1024
+            },
+            'INFO'
+        )
+        
         return document_bytes
         
+    except ValueError as ve:
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.error(f"❌ Validation error downloading from S3: {ve}")
+        log_error(
+            'document-processor-business-logic',
+            ve,
+            None,
+            {
+                'bucket': bucket,
+                'key': key,
+                'processing_time': processing_time,
+                'error_type': 'ValidationError'
+            },
+            'WARNING'
+        )
+        raise
     except s3_client.exceptions.NoSuchKey as e:
+        processing_time = (datetime.now() - start_time).total_seconds()
         logger.error(f"❌ S3 object not found: s3://{bucket}/{key}")
         logger.error(f"📊 Error details: {e}")
+        log_error(
+            'document-processor-business-logic',
+            e,
+            None,
+            {
+                'bucket': bucket,
+                'key': key,
+                'processing_time': processing_time,
+                'error_type': 'NoSuchKey'
+            },
+            'ERROR'
+        )
         raise Exception(f"S3 object not found: s3://{bucket}/{key}")
     except s3_client.exceptions.NoSuchBucket as e:
+        processing_time = (datetime.now() - start_time).total_seconds()
         logger.error(f"❌ S3 bucket not found: {bucket}")
         logger.error(f"📊 Error details: {e}")
+        log_error(
+            'document-processor-business-logic',
+            e,
+            None,
+            {
+                'bucket': bucket,
+                'key': key,
+                'processing_time': processing_time,
+                'error_type': 'NoSuchBucket'
+            },
+            'ERROR'
+        )
         raise Exception(f"S3 bucket not found: {bucket}")
     except Exception as e:
+        processing_time = (datetime.now() - start_time).total_seconds()
         logger.error(f"❌ Failed to download from S3: {e}")
         logger.error(f"📊 Error type: {type(e).__name__}")
         logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        
+        log_error(
+            'document-processor-business-logic',
+            e,
+            None,
+            {
+                'bucket': bucket,
+                'key': key,
+                'processing_time': processing_time,
+                'error_type': type(e).__name__
+            },
+            'ERROR'
+        )
         raise
 
 def upload_to_s3(bucket: str, key: str, data: bytes) -> str:
@@ -127,40 +245,191 @@ def call_docling_library(document_bytes: bytes, filename: str) -> Dict[str, Any]
         logger.error(f"❌ Error calling Docling library: {e}")
         raise
 
-def call_sentence_transformer_library(texts: List[str]) -> List[List[float]]:
-    """Call Sentence Transformer library Lambda for embeddings"""
+def call_pinecone_for_embeddings(texts: List[str]) -> List[List[float]]:
+    """Call Pinecone MCP server for embedding generation using native models with comprehensive logging"""
+    start_time = datetime.now()
+    
     try:
-        logger.info(f"🔧 Calling Sentence Transformer library for {len(texts)} texts")
+        logger.info(f"🔧 Starting Pinecone MCP server call for {len(texts)} texts using native embedding models")
+        logger.info(f"📊 Text lengths: {[len(text) for text in texts[:5]]}...")  # Log first 5 text lengths
+        
+        # Validate input parameters
+        if not texts or not isinstance(texts, list):
+            raise ValueError("Texts must be a non-empty list")
+        
+        if len(texts) == 0:
+            raise ValueError("Texts list cannot be empty")
+        
+        # Check for empty or invalid texts
+        valid_texts = []
+        for i, text in enumerate(texts):
+            if not text or not isinstance(text, str) or text.strip() == "":
+                logger.warning(f"⚠️ Skipping invalid text at index {i}: {repr(text)}")
+                continue
+            if len(text) > 10000:  # Limit text length
+                logger.warning(f"⚠️ Truncating long text at index {i} (length: {len(text)})")
+                text = text[:10000]
+            valid_texts.append(text.strip())
+        
+        if not valid_texts:
+            raise ValueError("No valid texts found after validation")
+        
+        logger.info(f"📊 Valid texts after filtering: {len(valid_texts)}")
         
         payload = {
-            'texts': texts
+            'texts': valid_texts,
+            'operation_type': 'generate_embeddings'
         }
         
-        # Get Sentence Transformer library function name from environment
-        st_function_name = os.environ.get('SENTENCE_TRANSFORMER_LIBRARY_FUNCTION', 'sentence-transformer-library-handler')
+        # Get Pinecone library function name from environment
+        pinecone_function_name = os.environ.get('PINECONE_LIBRARY_FUNCTION', 'pinecone-library-handler')
+        logger.info(f"📊 Calling Lambda function: {pinecone_function_name}")
         
+        # Invoke Lambda with timeout handling
         response = lambda_client.invoke(
-            FunctionName=st_function_name,
+            FunctionName=pinecone_function_name,
             InvocationType='RequestResponse',
             Payload=json.dumps(payload)
         )
         
-        result = json.loads(response['Payload'].read())
+        # Check Lambda invocation response
+        status_code = response.get('StatusCode', 0)
+        if status_code != 200:
+            logger.error(f"❌ Lambda invocation failed with status: {status_code}")
+            raise Exception(f"Lambda invocation failed with status: {status_code}")
+        
+        # Parse response
+        response_payload = response['Payload'].read()
+        if not response_payload:
+            raise Exception("Empty response from Pinecone Lambda")
+        
+        result = json.loads(response_payload)
+        logger.info(f"📊 Lambda response status: {result.get('statusCode')}")
         
         if result.get('statusCode') == 200:
-            st_result = json.loads(result['body'])
-            if st_result.get('success'):
-                logger.info(f"✅ Sentence Transformer library generated {len(st_result['embeddings'])} embeddings")
-                return st_result['embeddings']
-            else:
-                logger.error(f"❌ Sentence Transformer library failed: {st_result.get('error')}")
-                raise Exception(f"Sentence Transformer failed: {st_result.get('error')}")
-        else:
-            logger.error(f"❌ Sentence Transformer library Lambda call failed: {result}")
-            raise Exception(f"Sentence Transformer Lambda call failed: {result}")
+            pinecone_result = json.loads(result['body'])
+            logger.info(f"📊 Pinecone result keys: {list(pinecone_result.keys())}")
             
+            if pinecone_result.get('success'):
+                # Extract embeddings from Pinecone MCP server response
+                embeddings = []
+                embedding_data_list = pinecone_result.get('embeddings', [])
+                
+                logger.info(f"📊 Processing {len(embedding_data_list)} embedding results")
+                
+                for i, embedding_data in enumerate(embedding_data_list):
+                    if embedding_data.get('embedding') is not None:
+                        embedding = embedding_data['embedding']
+                        if isinstance(embedding, list) and len(embedding) > 0:
+                            embeddings.append(embedding)
+                            logger.debug(f"📊 Added embedding {i+1}: {len(embedding)} dimensions")
+                        else:
+                            logger.warning(f"⚠️ Invalid embedding at index {i}: {type(embedding)}")
+                            embeddings.append(None)
+                    else:
+                        logger.warning(f"⚠️ No embedding data at index {i}")
+                        embeddings.append(None)
+                
+                processing_time = (datetime.now() - start_time).total_seconds()
+                valid_embeddings = [e for e in embeddings if e is not None]
+                
+                logger.info(f"✅ Pinecone MCP server generated {len(valid_embeddings)} valid embeddings using native models")
+                logger.info(f"📊 Processing time: {processing_time:.3f}s")
+                logger.info(f"📊 Embedding rate: {len(valid_embeddings) / processing_time:.2f} embeddings/sec")
+                
+                # Log success to centralized error logger
+                log_custom_error(
+                    'document-processor-business-logic',
+                    'pinecone_embeddings_success',
+                    {
+                        'texts_count': len(valid_texts),
+                        'embeddings_generated': len(valid_embeddings),
+                        'processing_time': processing_time,
+                        'embedding_rate': len(valid_embeddings) / processing_time,
+                        'model': pinecone_result.get('method', 'unknown')
+                    },
+                    'INFO'
+                )
+                
+                return embeddings
+            else:
+                error_msg = pinecone_result.get('error', 'Unknown error')
+                logger.error(f"❌ Pinecone MCP server failed: {error_msg}")
+                log_error(
+                    'document-processor-business-logic',
+                    Exception(error_msg),
+                    None,
+                    {
+                        'texts_count': len(valid_texts),
+                        'processing_time': (datetime.now() - start_time).total_seconds(),
+                        'error_type': 'PineconeMCPError'
+                    },
+                    'ERROR'
+                )
+                raise Exception(f"Pinecone embedding generation failed: {error_msg}")
+        else:
+            error_msg = result.get('body', 'Unknown Lambda error')
+            logger.error(f"❌ Pinecone MCP server Lambda call failed: {result}")
+            log_error(
+                'document-processor-business-logic',
+                Exception(error_msg),
+                None,
+                {
+                    'texts_count': len(valid_texts),
+                    'processing_time': (datetime.now() - start_time).total_seconds(),
+                    'error_type': 'LambdaInvocationError'
+                },
+                'ERROR'
+            )
+            raise Exception(f"Pinecone MCP server Lambda call failed: {result}")
+            
+    except ValueError as ve:
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.error(f"❌ Validation error calling Pinecone MCP server: {ve}")
+        log_error(
+            'document-processor-business-logic',
+            ve,
+            None,
+            {
+                'texts_count': len(texts) if texts else 0,
+                'processing_time': processing_time,
+                'error_type': 'ValidationError'
+            },
+            'WARNING'
+        )
+        raise
+    except json.JSONDecodeError as je:
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.error(f"❌ JSON decode error calling Pinecone MCP server: {je}")
+        log_error(
+            'document-processor-business-logic',
+            je,
+            None,
+            {
+                'texts_count': len(texts) if texts else 0,
+                'processing_time': processing_time,
+                'error_type': 'JSONDecodeError'
+            },
+            'ERROR'
+        )
+        raise
     except Exception as e:
-        logger.error(f"❌ Error calling Sentence Transformer library: {e}")
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.error(f"❌ Error calling Pinecone MCP server for embeddings: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        
+        log_error(
+            'document-processor-business-logic',
+            e,
+            None,
+            {
+                'texts_count': len(texts) if texts else 0,
+                'processing_time': processing_time,
+                'error_type': type(e).__name__
+            },
+            'ERROR'
+        )
         raise
 
 def call_pinecone_library(vectors: List[Dict[str, Any]], operation: str = 'upsert', namespace: str = None) -> Dict[str, Any]:
@@ -246,14 +515,14 @@ def call_neo4j_library(cypher_query: str, parameters: Dict[str, Any] = None, ope
         raise
 
 def store_chunks_to_dynamodb(chunks: List[Dict[str, Any]], document_id: str, filename: str) -> bool:
-    """Store document chunks to DynamoDB - BUSINESS LOGIC"""
+    """Store document chunks to DynamoDB using MCP server - BUSINESS LOGIC"""
     try:
         logger.info(f"💾 Storing {len(chunks)} chunks to DynamoDB for document: {document_id}")
         
         table_name = os.environ.get('CHUNKS_TABLE', 'document-chunks')
-        table = dynamodb.Table(table_name)
+        dynamodb_function_name = os.environ.get('DYNAMODB_MCP_FUNCTION', 'dynamodb-mcp-handler')
         
-        # Store each chunk
+        # Store each chunk using DynamoDB MCP server
         for chunk in chunks:
             item = {
                 'chunk_id': chunk['id'],
@@ -267,13 +536,29 @@ def store_chunks_to_dynamodb(chunks: List[Dict[str, Any]], document_id: str, fil
                 'ttl': int(time.time()) + (365 * 24 * 60 * 60)  # 1 year TTL
             }
             
-            table.put_item(Item=item)
+            payload = {
+                'operation': 'write',
+                'table_name': table_name,
+                'item': item
+            }
+            
+            response = lambda_client.invoke(
+                FunctionName=dynamodb_function_name,
+                InvocationType='RequestResponse',
+                Payload=json.dumps(payload)
+            )
+            
+            result = json.loads(response['Payload'].read())
+            
+            if result.get('statusCode') != 200:
+                logger.error(f"❌ Failed to store chunk {chunk['id']}: {result}")
+                return False
         
-        logger.info(f"✅ Successfully stored {len(chunks)} chunks to DynamoDB")
+        logger.info(f"✅ Successfully stored {len(chunks)} chunks to DynamoDB via MCP server")
         return True
         
     except Exception as e:
-        logger.error(f"❌ Error storing chunks to DynamoDB: {e}")
+        logger.error(f"❌ Error storing chunks to DynamoDB via MCP server: {e}")
         return False
 
 def store_markdown_to_s3(markdown_content: str, document_id: str, filename: str) -> str:
@@ -327,10 +612,10 @@ def process_document_pipeline(document_bytes: bytes, filename: str, document_id:
             filename
         )
         
-        # Step 3: Generate embeddings using Sentence Transformer library
-        logger.info("🧠 Step 3: Generating embeddings with Sentence Transformer library")
+        # Step 3: Generate embeddings using Pinecone MCP server with native models
+        logger.info("🧠 Step 3: Generating embeddings with Pinecone MCP server using native models")
         texts = [chunk["text"] for chunk in docling_result["chunks"]]
-        embeddings = call_sentence_transformer_library(texts)
+        embeddings = call_pinecone_for_embeddings(texts)
         
         # Add embeddings to chunks
         chunks_with_embeddings = []

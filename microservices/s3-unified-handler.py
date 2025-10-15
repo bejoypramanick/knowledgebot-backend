@@ -35,50 +35,155 @@ logger.info("✅ Initialized S3 client")
 
 def generate_presigned_url(filename: str, content_type: str = None) -> Dict[str, Any]:
     """Generate presigned URL for S3 upload - BUSINESS LOGIC"""
+    start_time = datetime.now()
+    document_id = None
+    
     try:
-        logger.info(f"🔗 Generating presigned URL for file: {filename}")
+        logger.info(f"🔗 Starting presigned URL generation for file: {filename}")
+        logger.info(f"📊 Content type: {content_type or 'application/octet-stream'}")
+        
+        # Validate input parameters
+        if not filename or not isinstance(filename, str):
+            raise ValueError("Filename must be a non-empty string")
+        
+        if len(filename) > 255:
+            raise ValueError("Filename too long (max 255 characters)")
         
         # Generate unique document ID and S3 key
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = start_time.strftime("%Y%m%d_%H%M%S")
         document_id = f"doc_{timestamp}_{hash(filename) % 10000:04d}"
         s3_key = f"documents/{timestamp}/{document_id}/{filename}"
         
+        logger.info(f"📋 Generated document ID: {document_id}")
+        logger.info(f"📋 Generated S3 key: {s3_key}")
+        
         # Get S3 bucket from environment
         bucket_name = os.environ.get('DOCUMENTS_BUCKET', 'knowledgebot-documents')
+        logger.info(f"📦 Using S3 bucket: {bucket_name}")
         
-        # Generate presigned URL
+        # Validate bucket name
+        if not bucket_name or not isinstance(bucket_name, str):
+            raise ValueError("Invalid S3 bucket name")
+        
+        # Generate presigned URL with optimized parameters
         presigned_url = s3_client.generate_presigned_url(
             'put_object',
             Params={
                 'Bucket': bucket_name,
                 'Key': s3_key,
-                'ContentType': content_type or 'application/octet-stream'
+                'ContentType': content_type or 'application/octet-stream',
+                'ServerSideEncryption': 'AES256'  # Add encryption
             },
-            ExpiresIn=3600  # 1 hour
+            ExpiresIn=15,  # 15 seconds - frontend uploads immediately
+            HttpMethod='PUT'
         )
         
-        logger.info(f"✅ Generated presigned URL for: {filename}")
-        logger.info(f"S3 Key: {s3_key}")
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.info(f"✅ Successfully generated presigned URL for: {filename}")
+        logger.info(f"📊 Processing time: {processing_time:.3f}s")
+        logger.info(f"📊 S3 Key: {s3_key}")
+        logger.info(f"📊 Bucket: {bucket_name}")
+        
+        # Log to centralized error logger for success
+        log_custom_error(
+            's3-unified-handler',
+            'presigned_url_generated',
+            {
+                'filename': filename,
+                'document_id': document_id,
+                's3_key': s3_key,
+                'bucket': bucket_name,
+                'processing_time': processing_time,
+                'content_type': content_type
+            },
+            'INFO'
+        )
         
         return {
             "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
             "body": json.dumps({
                 "success": True,
                 "presigned_url": presigned_url,
                 "document_id": document_id,
                 "s3_key": s3_key,
                 "bucket": bucket_name,
-                "expires_in": 3600
+                "expires_in": 15,
+                "processing_time": processing_time
             })
         }
         
-    except Exception as e:
-        logger.error(f"❌ Error generating presigned URL: {e}")
+    except ValueError as ve:
+        logger.error(f"❌ Validation error generating presigned URL: {ve}")
+        log_error(
+            's3-unified-handler',
+            ve,
+            None,
+            {
+                'filename': filename,
+                'content_type': content_type,
+                'document_id': document_id,
+                'error_type': 'ValidationError'
+            },
+            'WARNING'
+        )
         return {
-            "statusCode": 500,
+            "statusCode": 400,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
             "body": json.dumps({
                 "success": False,
-                "error": str(e)
+                "error": str(ve),
+                "error_type": "ValidationError",
+                "timestamp": datetime.now().isoformat()
+            })
+        }
+    except Exception as e:
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.error(f"❌ Error generating presigned URL: {e}")
+        logger.error(f"📊 Error type: {type(e).__name__}")
+        logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+        
+        # Log to centralized error logger
+        log_error(
+            's3-unified-handler',
+            e,
+            None,
+            {
+                'filename': filename,
+                'content_type': content_type,
+                'document_id': document_id,
+                'processing_time': processing_time,
+                'error_type': type(e).__name__
+            },
+            'ERROR'
+        )
+        
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true"
+            },
+            "body": json.dumps({
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.now().isoformat()
             })
         }
 
