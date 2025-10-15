@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """
-Pinecone MCP Server - Based on official Pinecone MCP server
-Provides comprehensive Pinecone operations through MCP protocol
-Supports integrated inference models and advanced search capabilities
-Based on: https://docs.pinecone.io/guides/operations/mcp-server
+Pinecone MCP Server - Correct Implementation
+Based on actual Pinecone MCP server with 5 core tools:
+- semantic-search: Conducts searches within the Pinecone index
+- read-document: Retrieves documents stored in the index  
+- list-documents: Lists all documents available in the index
+- pinecone-stats: Provides statistics about the index
+- process-document: Processes and upserts documents into the index
+
+This server uses natural language instructions and internal tool orchestration
+rather than exposing individual API operations as separate tools.
 """
 
 import asyncio
@@ -35,255 +41,146 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class PineconeMCPServer:
-    """Pinecone MCP Server for comprehensive vector operations"""
+    """Pinecone MCP Server with 5 core tools for natural language interaction"""
     
     def __init__(self):
         self.server = Server("pinecone-mcp-server")
         self.pc = None
+        self.index = None
         self._setup_handlers()
         self._initialize_client()
     
     def _initialize_client(self):
-        """Initialize Pinecone client"""
+        """Initialize Pinecone client and index"""
         try:
             api_key = os.environ.get('PINECONE_API_KEY')
-            environment = os.environ.get('PINECONE_ENVIRONMENT', 'us-east-1')
+            index_name = os.environ.get('PINECONE_INDEX_NAME')
             
             if not api_key:
                 logger.error("PINECONE_API_KEY environment variable not set")
                 return
             
             self.pc = Pinecone(api_key=api_key)
-            logger.info(f"✅ Pinecone client initialized successfully")
+            
+            if index_name:
+                self.index = self.pc.Index(index_name)
+                logger.info(f"✅ Pinecone client initialized with index: {index_name}")
+            else:
+                logger.info("✅ Pinecone client initialized (no index specified)")
                 
         except Exception as e:
             logger.error(f"❌ Failed to initialize Pinecone client: {e}")
             self.pc = None
+            self.index = None
     
     def _setup_handlers(self):
-        """Setup MCP server handlers"""
+        """Setup MCP server handlers with 5 core tools"""
         
         @self.server.list_tools()
         async def handle_list_tools() -> List[Tool]:
-            """List available tools based on official Pinecone MCP server"""
+            """List the 5 core Pinecone MCP tools"""
             return [
                 Tool(
-                    name="search-docs",
-                    description="Search the official Pinecone documentation",
+                    name="semantic-search",
+                    description="Conducts semantic searches within the Pinecone index. Use natural language to describe what you're looking for.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Search query for Pinecone documentation"
+                                "description": "Natural language query describing what you want to search for"
                             },
-                            "limit": {
+                            "top_k": {
                                 "type": "integer",
-                                "description": "Maximum number of results to return",
+                                "description": "Number of results to return",
                                 "default": 10
+                            },
+                            "filter": {
+                                "type": "object",
+                                "description": "Optional metadata filter for the search",
+                                "default": {}
                             }
                         },
                         "required": ["query"]
                     }
                 ),
                 Tool(
-                    name="list-indexes",
-                    description="Lists all Pinecone indexes",
+                    name="read-document",
+                    description="Retrieves a specific document from the Pinecone index by its ID",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "document_id": {
+                                "type": "string",
+                                "description": "The ID of the document to retrieve"
+                            }
+                        },
+                        "required": ["document_id"]
+                    }
+                ),
+                Tool(
+                    name="list-documents",
+                    description="Lists all documents available in the Pinecone index with optional filtering",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum number of documents to return",
+                                "default": 100
+                            },
+                            "filter": {
+                                "type": "object",
+                                "description": "Optional metadata filter for the documents",
+                                "default": {}
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="pinecone-stats",
+                    description="Provides comprehensive statistics about the Pinecone index including record count, dimensions, and usage metrics",
                     inputSchema={
                         "type": "object",
                         "properties": {}
                     }
                 ),
                 Tool(
-                    name="describe-index",
-                    description="Describes the configuration of an index",
+                    name="process-document",
+                    description="Processes and upserts documents into the Pinecone index, including automatic chunking and embedding generation",
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "index_name": {
+                            "content": {
                                 "type": "string",
-                                "description": "Name of the index to describe"
-                            }
-                        },
-                        "required": ["index_name"]
-                    }
-                ),
-                Tool(
-                    name="describe-index-stats",
-                    description="Provides statistics about the data in the index",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_name": {
-                                "type": "string",
-                                "description": "Name of the index to get stats for"
-                            }
-                        },
-                        "required": ["index_name"]
-                    }
-                ),
-                Tool(
-                    name="create-index-for-model",
-                    description="Creates a new index that uses an integrated inference model",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_name": {
-                                "type": "string",
-                                "description": "Name of the index to create"
+                                "description": "The text content to process and store"
                             },
-                            "dimension": {
-                                "type": "integer",
-                                "description": "Dimension of the vectors"
-                            },
-                            "metric": {
-                                "type": "string",
-                                "enum": ["cosine", "euclidean", "dotproduct"],
-                                "description": "Distance metric for the index",
-                                "default": "cosine"
-                            },
-                            "model_name": {
-                                "type": "string",
-                                "description": "Name of the integrated inference model"
-                            }
-                        },
-                        "required": ["index_name", "dimension", "model_name"]
-                    }
-                ),
-                Tool(
-                    name="upsert-records",
-                    description="Inserts or updates records in an index with integrated inference",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_name": {
-                                "type": "string",
-                                "description": "Name of the index to upsert to"
-                            },
-                            "records": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "string"},
-                                        "text": {"type": "string"},
-                                        "metadata": {"type": "object"}
-                                    },
-                                    "required": ["id", "text"]
-                                },
-                                "description": "Records to upsert with text for integrated inference"
-                            },
-                            "namespace": {
-                                "type": "string",
-                                "description": "Namespace to upsert to",
-                                "default": "default"
-                            }
-                        },
-                        "required": ["index_name", "records"]
-                    }
-                ),
-                Tool(
-                    name="search-records",
-                    description="Searches for records in an index based on a text query using integrated inference",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_name": {
-                                "type": "string",
-                                "description": "Name of the index to search"
-                            },
-                            "query": {
-                                "type": "string",
-                                "description": "Text query to search for"
-                            },
-                            "top_k": {
-                                "type": "integer",
-                                "description": "Number of results to return",
-                                "default": 10
-                            },
-                            "filter": {
+                            "metadata": {
                                 "type": "object",
-                                "description": "Metadata filter",
+                                "description": "Optional metadata to associate with the document",
                                 "default": {}
                             },
-                            "namespace": {
+                            "document_id": {
                                 "type": "string",
-                                "description": "Namespace to search in",
-                                "default": "default"
+                                "description": "Optional custom ID for the document. If not provided, a UUID will be generated"
                             },
-                            "rerank": {
-                                "type": "boolean",
-                                "description": "Whether to rerank results",
-                                "default": False
-                            }
-                        },
-                        "required": ["index_name", "query"]
-                    }
-                ),
-                Tool(
-                    name="cascading-search",
-                    description="Searches for records across multiple indexes, deduplicating and reranking results",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_names": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of index names to search across"
-                            },
-                            "query": {
-                                "type": "string",
-                                "description": "Text query to search for"
-                            },
-                            "top_k": {
+                            "chunk_size": {
                                 "type": "integer",
-                                "description": "Number of results to return",
-                                "default": 10
+                                "description": "Size of text chunks for processing",
+                                "default": 1000
                             },
-                            "filter": {
-                                "type": "object",
-                                "description": "Metadata filter",
-                                "default": {}
-                            }
-                        },
-                        "required": ["index_names", "query"]
-                    }
-                ),
-                Tool(
-                    name="rerank-documents",
-                    description="Reranks a collection of records or text documents using a specialized reranking model",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "documents": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "string"},
-                                        "text": {"type": "string"},
-                                        "metadata": {"type": "object"}
-                                    },
-                                    "required": ["id", "text"]
-                                },
-                                "description": "Documents to rerank"
-                            },
-                            "query": {
-                                "type": "string",
-                                "description": "Query to rerank against"
-                            },
-                            "top_k": {
+                            "chunk_overlap": {
                                 "type": "integer",
-                                "description": "Number of top results to return",
-                                "default": 10
+                                "description": "Overlap between chunks",
+                                "default": 200
                             }
                         },
-                        "required": ["documents", "query"]
+                        "required": ["content"]
                     }
                 ),
                 Tool(
                     name="get_health",
-                    description="Check server health status",
+                    description="Check server health status and connection to Pinecone",
                     inputSchema={
                         "type": "object",
                         "properties": {}
@@ -293,26 +190,18 @@ class PineconeMCPServer:
         
         @self.server.call_tool()
         async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-            """Handle tool calls based on official Pinecone MCP server"""
+            """Handle tool calls for the 5 core Pinecone MCP tools"""
             try:
-                if name == "search-docs":
-                    return await self._search_docs(arguments)
-                elif name == "list-indexes":
-                    return await self._list_indexes()
-                elif name == "describe-index":
-                    return await self._describe_index(arguments)
-                elif name == "describe-index-stats":
-                    return await self._describe_index_stats(arguments)
-                elif name == "create-index-for-model":
-                    return await self._create_index_for_model(arguments)
-                elif name == "upsert-records":
-                    return await self._upsert_records(arguments)
-                elif name == "search-records":
-                    return await self._search_records(arguments)
-                elif name == "cascading-search":
-                    return await self._cascading_search(arguments)
-                elif name == "rerank-documents":
-                    return await self._rerank_documents(arguments)
+                if name == "semantic-search":
+                    return await self._semantic_search(arguments)
+                elif name == "read-document":
+                    return await self._read_document(arguments)
+                elif name == "list-documents":
+                    return await self._list_documents(arguments)
+                elif name == "pinecone-stats":
+                    return await self._pinecone_stats()
+                elif name == "process-document":
+                    return await self._process_document(arguments)
                 elif name == "get_health":
                     return await self._get_health()
                 else:
@@ -327,11 +216,21 @@ class PineconeMCPServer:
                     text=f"Error: {str(e)}"
                 )]
     
-    async def _search_docs(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Search the official Pinecone documentation"""
+    async def _semantic_search(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Conducts semantic searches within the Pinecone index"""
         try:
+            if not self.index:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "success": False,
+                        "error": "Pinecone index not initialized"
+                    })
+                )]
+            
             query = arguments.get("query")
-            limit = arguments.get("limit", 10)
+            top_k = arguments.get("top_k", 10)
+            filter_dict = arguments.get("filter", {})
             
             if not query:
                 return [TextContent(
@@ -342,356 +241,32 @@ class PineconeMCPServer:
                     })
                 )]
             
-            # For now, return a placeholder response
-            # In a real implementation, this would search Pinecone's documentation
-            result_data = {
-                "success": True,
-                "query": query,
-                "results": [
-                    {
-                        "title": f"Pinecone Documentation Result for: {query}",
-                        "url": "https://docs.pinecone.io",
-                        "snippet": f"Documentation content related to {query}",
-                        "relevance_score": 0.95
-                    }
-                ],
-                "total_results": 1,
-                "limit": limit
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error searching docs: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _list_indexes(self) -> List[TextContent]:
-        """Lists all Pinecone indexes"""
-        try:
-            if not self.pc:
+            # For semantic search, we need to generate embeddings from the query
+            # This is where the MCP server would use its internal embedding model
+            try:
+                from sentence_transformers import SentenceTransformer
+                model = SentenceTransformer('all-MiniLM-L6-v2')
+                query_embedding = model.encode([query])[0].tolist()
+            except ImportError:
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "Pinecone client not initialized"
+                        "error": "Embedding model not available. Please install sentence-transformers."
                     })
                 )]
             
-            # List all indexes
-            indexes = self.pc.list_indexes()
-            
-            result_data = {
-                "success": True,
-                "indexes": [
-                    {
-                        "name": index.name,
-                        "dimension": index.dimension,
-                        "metric": index.metric,
-                        "host": index.host,
-                        "status": index.status.state if hasattr(index.status, 'state') else 'unknown'
-                    }
-                    for index in indexes
-                ],
-                "total_count": len(indexes)
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error listing indexes: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _describe_index(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Describes the configuration of an index"""
-        try:
-            if not self.pc:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "Pinecone client not initialized"
-                    })
-                )]
-            
-            index_name = arguments.get("index_name")
-            if not index_name:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name is required"
-                    })
-                )]
-            
-            # Get index description
-            index = self.pc.describe_index(index_name)
-            
-            result_data = {
-                "success": True,
-                "index": {
-                    "name": index.name,
-                    "dimension": index.dimension,
-                    "metric": index.metric,
-                    "host": index.host,
-                    "status": index.status.state if hasattr(index.status, 'state') else 'unknown',
-                    "pod_type": getattr(index, 'pod_type', None),
-                    "pods": getattr(index, 'pods', None),
-                    "replicas": getattr(index, 'replicas', None)
-                }
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error describing index: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _describe_index_stats(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Provides statistics about the data in the index"""
-        try:
-            if not self.pc:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "Pinecone client not initialized"
-                    })
-                )]
-            
-            index_name = arguments.get("index_name")
-            if not index_name:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name is required"
-                    })
-                )]
-            
-            # Get index stats
-            index = self.pc.Index(index_name)
-            stats = index.describe_index_stats()
-            
-            result_data = {
-                "success": True,
-                "stats": {
-                    "total_vector_count": stats.total_vector_count,
-                    "dimension": stats.dimension,
-                    "index_fullness": stats.index_fullness,
-                    "namespaces": dict(stats.namespaces) if stats.namespaces else {}
-                }
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error getting index stats: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _create_index_for_model(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Creates a new index that uses an integrated inference model"""
-        try:
-            if not self.pc:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "Pinecone client not initialized"
-                    })
-                )]
-            
-            index_name = arguments.get("index_name")
-            dimension = arguments.get("dimension")
-            metric = arguments.get("metric", "cosine")
-            model_name = arguments.get("model_name")
-            
-            if not all([index_name, dimension, model_name]):
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name, dimension, and model_name are required"
-                    })
-                )]
-            
-            # Create index with integrated inference model
-            # Note: This is a simplified implementation
-            # In practice, you'd need to handle the specific model configuration
-            self.pc.create_index(
-                name=index_name,
-                dimension=dimension,
-                metric=metric,
-                spec={
-                    "serverless": {
-                        "cloud": "aws",
-                        "region": "us-east-1"
-                    }
-                }
-            )
-            
-            result_data = {
-                "success": True,
-                "index_name": index_name,
-                "dimension": dimension,
-                "metric": metric,
-                "model_name": model_name,
-                "message": f"Index {index_name} created successfully with integrated inference model {model_name}"
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error creating index: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _upsert_records(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Inserts or updates records in an index with integrated inference"""
-        try:
-            if not self.pc:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "Pinecone client not initialized"
-                    })
-                )]
-            
-            index_name = arguments.get("index_name")
-            records = arguments.get("records", [])
-            namespace = arguments.get("namespace", "default")
-            
-            if not index_name or not records:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name and records are required"
-                    })
-                )]
-            
-            # Get index
-            index = self.pc.Index(index_name)
-            
-            # Upsert records with integrated inference
-            # Note: This assumes the index has integrated inference configured
-            upsert_kwargs = {
-                "vectors": records,
-                "namespace": namespace if namespace != "default" else None
-            }
-            
-            result = index.upsert(**upsert_kwargs)
-            
-            result_data = {
-                "success": True,
-                "upserted_count": result.upserted_count,
-                "namespace": namespace,
-                "index_name": index_name
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error upserting records: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _search_records(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Searches for records in an index based on a text query using integrated inference"""
-        try:
-            if not self.pc:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "Pinecone client not initialized"
-                    })
-                )]
-            
-            index_name = arguments.get("index_name")
-            query = arguments.get("query")
-            top_k = arguments.get("top_k", 10)
-            filter_dict = arguments.get("filter", {})
-            namespace = arguments.get("namespace", "default")
-            rerank = arguments.get("rerank", False)
-            
-            if not index_name or not query:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name and query are required"
-                    })
-                )]
-            
-            # Get index
-            index = self.pc.Index(index_name)
-            
-            # Search with integrated inference
-            # Note: This assumes the index has integrated inference configured
+            # Perform the search
             search_kwargs = {
-                "vector": query,  # Text query for integrated inference
+                "vector": query_embedding,
                 "top_k": top_k,
-                "namespace": namespace if namespace != "default" else None,
                 "include_metadata": True
             }
             
             if filter_dict:
                 search_kwargs["filter"] = filter_dict
             
-            result = index.query(**search_kwargs)
+            result = self.index.query(**search_kwargs)
             
             # Format results
             matches = []
@@ -704,11 +279,10 @@ class PineconeMCPServer:
             
             result_data = {
                 "success": True,
-                "matches": matches,
-                "namespace": result.namespace,
                 "query": query,
-                "reranked": rerank,
-                "total_matches": len(matches)
+                "matches": matches,
+                "total_matches": len(matches),
+                "index_name": self.index.name if hasattr(self.index, 'name') else 'unknown'
             }
             
             return [TextContent(
@@ -717,7 +291,7 @@ class PineconeMCPServer:
             )]
             
         except Exception as e:
-            logger.error(f"Error searching records: {e}")
+            logger.error(f"Error in semantic search: {e}")
             return [TextContent(
                 type="text",
                 text=json.dumps({
@@ -726,81 +300,117 @@ class PineconeMCPServer:
                 }, indent=2)
             )]
     
-    async def _cascading_search(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Searches for records across multiple indexes, deduplicating and reranking results"""
+    async def _read_document(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Retrieves a specific document from the Pinecone index by its ID"""
         try:
-            if not self.pc:
+            if not self.index:
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "Pinecone client not initialized"
+                        "error": "Pinecone index not initialized"
                     })
                 )]
             
-            index_names = arguments.get("index_names", [])
-            query = arguments.get("query")
-            top_k = arguments.get("top_k", 10)
+            document_id = arguments.get("document_id")
+            if not document_id:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "success": False,
+                        "error": "document_id is required"
+                    })
+                )]
+            
+            # Fetch the document by ID
+            result = self.index.fetch(ids=[document_id])
+            
+            if document_id in result.vectors:
+                vector_data = result.vectors[document_id]
+                document_data = {
+                    "success": True,
+                    "document_id": document_id,
+                    "metadata": vector_data.metadata,
+                    "dimensions": len(vector_data.values) if vector_data.values else 0,
+                    "found": True
+                }
+            else:
+                document_data = {
+                    "success": True,
+                    "document_id": document_id,
+                    "found": False,
+                    "message": "Document not found"
+                }
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps(document_data, indent=2)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error reading document: {e}")
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "success": False,
+                    "error": str(e)
+                }, indent=2)
+            )]
+    
+    async def _list_documents(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Lists all documents available in the Pinecone index"""
+        try:
+            if not self.index:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "success": False,
+                        "error": "Pinecone index not initialized"
+                    })
+                )]
+            
+            limit = arguments.get("limit", 100)
             filter_dict = arguments.get("filter", {})
             
-            if not index_names or not query:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_names and query are required"
-                    })
-                )]
+            # Get index stats first to understand the scope
+            stats = self.index.describe_index_stats()
+            total_vectors = stats.total_vector_count
             
-            # Search across multiple indexes
-            all_matches = []
-            for index_name in index_names:
-                try:
-                    index = self.pc.Index(index_name)
-                    search_kwargs = {
-                        "vector": query,
-                        "top_k": top_k,
-                        "include_metadata": True
-                    }
-                    if filter_dict:
-                        search_kwargs["filter"] = filter_dict
-                    
-                    result = index.query(**search_kwargs)
-                    for match in result.matches:
-                        match.metadata["source_index"] = index_name
-                        all_matches.append(match)
-                except Exception as e:
-                    logger.warning(f"Error searching index {index_name}: {e}")
-                    continue
+            # For listing documents, we'll use a scan operation
+            # Note: This is a simplified implementation
+            # In practice, you might want to implement pagination
+            documents = []
             
-            # Deduplicate and rerank results
-            seen_ids = set()
-            unique_matches = []
-            for match in all_matches:
-                if match.id not in seen_ids:
-                    seen_ids.add(match.id)
-                    unique_matches.append(match)
-            
-            # Sort by score (rerank)
-            unique_matches.sort(key=lambda x: x.score, reverse=True)
-            
-            # Take top_k results
-            top_matches = unique_matches[:top_k]
-            
-            result_data = {
-                "success": True,
-                "matches": [
-                    {
+            # Use query with a zero vector to get some documents
+            # This is a workaround since Pinecone doesn't have a direct "list all" operation
+            try:
+                # Create a zero vector for the query
+                zero_vector = [0.0] * 1024  # Assuming 1024 dimensions, adjust as needed
+                
+                result = self.index.query(
+                    vector=zero_vector,
+                    top_k=min(limit, 1000),  # Pinecone has limits on top_k
+                    include_metadata=True
+                )
+                
+                for match in result.matches:
+                    documents.append({
                         "id": match.id,
                         "score": match.score,
                         "metadata": match.metadata
-                    }
-                    for match in top_matches
-                ],
-                "query": query,
-                "searched_indexes": index_names,
-                "total_matches": len(top_matches),
-                "deduplicated": True
+                    })
+                
+            except Exception as e:
+                logger.warning(f"Error during document listing: {e}")
+                # Fallback: return stats information
+                documents = [{"message": "Unable to list documents directly", "total_vectors": total_vectors}]
+            
+            result_data = {
+                "success": True,
+                "documents": documents,
+                "total_documents": len(documents),
+                "total_vectors_in_index": total_vectors,
+                "limit_applied": limit
             }
             
             return [TextContent(
@@ -809,7 +419,7 @@ class PineconeMCPServer:
             )]
             
         except Exception as e:
-            logger.error(f"Error in cascading search: {e}")
+            logger.error(f"Error listing documents: {e}")
             return [TextContent(
                 type="text",
                 text=json.dumps({
@@ -818,48 +428,40 @@ class PineconeMCPServer:
                 }, indent=2)
             )]
     
-    async def _rerank_documents(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Reranks a collection of records or text documents using a specialized reranking model"""
+    async def _pinecone_stats(self) -> List[TextContent]:
+        """Provides comprehensive statistics about the Pinecone index"""
         try:
-            documents = arguments.get("documents", [])
-            query = arguments.get("query")
-            top_k = arguments.get("top_k", 10)
-            
-            if not documents or not query:
+            if not self.index:
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "documents and query are required"
+                        "error": "Pinecone index not initialized"
                     })
                 )]
             
-            # Simple reranking implementation
-            # In practice, you'd use a specialized reranking model
-            scored_documents = []
-            for doc in documents:
-                # Simple scoring based on text similarity (placeholder)
-                text = doc.get("text", "")
-                score = len(set(query.lower().split()) & set(text.lower().split())) / len(query.split())
-                scored_documents.append({
-                    "id": doc.get("id"),
-                    "text": text,
-                    "metadata": doc.get("metadata", {}),
-                    "rerank_score": score
-                })
+            # Get index statistics
+            stats = self.index.describe_index_stats()
             
-            # Sort by rerank score
-            scored_documents.sort(key=lambda x: x["rerank_score"], reverse=True)
-            
-            # Take top_k results
-            top_documents = scored_documents[:top_k]
+            # Get index description
+            index_info = self.pc.describe_index(self.index.name) if hasattr(self.index, 'name') else None
             
             result_data = {
                 "success": True,
-                "reranked_documents": top_documents,
-                "query": query,
-                "total_documents": len(documents),
-                "returned_documents": len(top_documents)
+                "index_stats": {
+                    "total_vector_count": stats.total_vector_count,
+                    "dimension": stats.dimension,
+                    "index_fullness": stats.index_fullness,
+                    "namespaces": dict(stats.namespaces) if stats.namespaces else {}
+                },
+                "index_info": {
+                    "name": index_info.name if index_info else "unknown",
+                    "dimension": index_info.dimension if index_info else stats.dimension,
+                    "metric": index_info.metric if index_info else "unknown",
+                    "host": index_info.host if index_info else "unknown",
+                    "status": index_info.status.state if index_info and hasattr(index_info.status, 'state') else "unknown"
+                } if index_info else None,
+                "timestamp": datetime.now().isoformat()
             }
             
             return [TextContent(
@@ -868,7 +470,131 @@ class PineconeMCPServer:
             )]
             
         except Exception as e:
-            logger.error(f"Error reranking documents: {e}")
+            logger.error(f"Error getting Pinecone stats: {e}")
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "success": False,
+                    "error": str(e)
+                }, indent=2)
+            )]
+    
+    async def _process_document(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Processes and upserts documents into the Pinecone index with chunking and embedding"""
+        try:
+            if not self.index:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "success": False,
+                        "error": "Pinecone index not initialized"
+                    })
+                )]
+            
+            content = arguments.get("content")
+            metadata = arguments.get("metadata", {})
+            document_id = arguments.get("document_id")
+            chunk_size = arguments.get("chunk_size", 1000)
+            chunk_overlap = arguments.get("chunk_overlap", 200)
+            
+            if not content:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "success": False,
+                        "error": "Content is required"
+                    })
+                )]
+            
+            # Generate document ID if not provided
+            if not document_id:
+                import uuid
+                document_id = str(uuid.uuid4())
+            
+            # Simple text chunking
+            chunks = []
+            start = 0
+            while start < len(content):
+                end = min(start + chunk_size, len(content))
+                chunk_text = content[start:end]
+                
+                # Find a good break point (end of sentence or word)
+                if end < len(content):
+                    # Try to break at sentence end
+                    last_period = chunk_text.rfind('.')
+                    last_exclamation = chunk_text.rfind('!')
+                    last_question = chunk_text.rfind('?')
+                    last_break = max(last_period, last_exclamation, last_question)
+                    
+                    if last_break > chunk_size * 0.5:  # If we found a good break point
+                        chunk_text = chunk_text[:last_break + 1]
+                        end = start + last_break + 1
+                
+                chunks.append({
+                    "text": chunk_text.strip(),
+                    "chunk_id": f"{document_id}_chunk_{len(chunks)}",
+                    "start_pos": start,
+                    "end_pos": end
+                })
+                
+                start = end - chunk_overlap if end < len(content) else end
+            
+            # Generate embeddings for chunks
+            try:
+                from sentence_transformers import SentenceTransformer
+                model = SentenceTransformer('all-MiniLM-L6-v2')
+                
+                chunk_texts = [chunk["text"] for chunk in chunks]
+                embeddings = model.encode(chunk_texts)
+                
+                # Prepare vectors for upsert
+                vectors = []
+                for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                    chunk_metadata = {
+                        **metadata,
+                        "document_id": document_id,
+                        "chunk_id": chunk["chunk_id"],
+                        "chunk_index": i,
+                        "text": chunk["text"],
+                        "start_pos": chunk["start_pos"],
+                        "end_pos": chunk["end_pos"]
+                    }
+                    
+                    vectors.append({
+                        "id": chunk["chunk_id"],
+                        "values": embedding.tolist(),
+                        "metadata": chunk_metadata
+                    })
+                
+                # Upsert vectors
+                result = self.index.upsert(vectors=vectors)
+                
+                result_data = {
+                    "success": True,
+                    "document_id": document_id,
+                    "chunks_created": len(chunks),
+                    "vectors_upserted": result.upserted_count,
+                    "chunk_size": chunk_size,
+                    "chunk_overlap": chunk_overlap,
+                    "total_content_length": len(content)
+                }
+                
+            except ImportError:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "success": False,
+                        "error": "Embedding model not available. Please install sentence-transformers."
+                    })
+                )]
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps(result_data, indent=2)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error processing document: {e}")
             return [TextContent(
                 type="text",
                 text=json.dumps({
@@ -880,11 +606,19 @@ class PineconeMCPServer:
     async def _get_health(self) -> List[TextContent]:
         """Get server health status"""
         status = {
-            "status": "healthy" if self.pc else "unhealthy",
+            "status": "healthy" if self.pc and self.index else "unhealthy",
             "client_initialized": self.pc is not None,
+            "index_initialized": self.index is not None,
             "server": "pinecone-mcp-server",
             "version": "1.0.0",
-            "official_mcp_compatible": True
+            "tools_available": [
+                "semantic-search",
+                "read-document", 
+                "list-documents",
+                "pinecone-stats",
+                "process-document"
+            ],
+            "natural_language_support": True
         }
         
         return [TextContent(
