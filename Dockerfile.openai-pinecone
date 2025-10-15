@@ -1,0 +1,34 @@
+# OpenAI + Pinecone MCP Server Dockerfile
+# Combines OpenAI for natural language processing with Pinecone MCP for vector operations
+
+FROM public.ecr.aws/lambda/python:3.11
+
+# Set working directory
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+# Install system dependencies
+RUN yum update -y && \
+    yum groupinstall -y "Development Tools" && \
+    yum install -y curl gcc gcc-c++ make python3-devel && \
+    yum clean all
+
+# Copy requirements files
+COPY requirements-openai-library.txt ${LAMBDA_TASK_ROOT}/
+COPY requirements-pinecone-mcp.txt ${LAMBDA_TASK_ROOT}/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-openai-library.txt && \
+    pip install --no-cache-dir -r requirements-pinecone-mcp.txt
+
+# Copy MCP server files
+COPY microservices/openai-pinecone-mcp-server.py ${LAMBDA_TASK_ROOT}/
+COPY microservices/pinecone-mcp-client.py ${LAMBDA_TASK_ROOT}/
+
+# Set environment variables
+ENV PYTHONPATH=${LAMBDA_TASK_ROOT}
+ENV OPENAI_API_KEY=${OPENAI_API_KEY}
+ENV PINECONE_MCP_URL=${PINECONE_MCP_URL:-http://localhost:3000/mcp}
+
+# Set the Lambda handler
+CMD ["openai-pinecone-mcp-server.lambda_handler"]

@@ -1,0 +1,12 @@
+# Requirements for Pinecone MCP client integration
+# This is for the OpenAI MCP server to communicate with Pinecone MCP server
+
+# HTTP client for JSON-RPC calls to Pinecone MCP server
+requests>=2.31.0
+aiohttp>=3.8.0
+
+# JSON-RPC client for MCP communication
+jsonrpc-requests>=0.4.0
+
+# Additional utilities
+python-dotenv>=1.0.0

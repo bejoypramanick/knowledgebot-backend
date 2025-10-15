@@ -26,21 +26,24 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment: chatbot
-    strategy:
-      matrix:
-        include:
-          - name: docling
-            dockerfile: Dockerfile.docling-library
-            image: knowledgebot-docling-mcp
-          - name: neo4j
-            dockerfile: Dockerfile.neo4j-library
-            image: knowledgebot-neo4j-mcp
-          - name: pinecone
-            dockerfile: Dockerfile.pinecone-library
-            image: knowledgebot-pinecone-mcp
-          - name: dynamodb
-            dockerfile: Dockerfile.dynamodb-library
-            image: knowledgebot-dynamodb-mcp
+                strategy:
+                  matrix:
+                    include:
+                      - name: docling
+                        dockerfile: Dockerfile.docling-library
+                        image: knowledgebot-docling-mcp
+                      - name: neo4j
+                        dockerfile: Dockerfile.neo4j-library
+                        image: knowledgebot-neo4j-mcp
+                      - name: pinecone-mcp
+                        dockerfile: Dockerfile.pinecone-mcp
+                        image: knowledgebot-pinecone-mcp
+                      - name: openai-pinecone
+                        dockerfile: Dockerfile.openai-pinecone
+                        image: knowledgebot-openai-pinecone-mcp
+                      - name: dynamodb
+                        dockerfile: Dockerfile.dynamodb-library
+                        image: knowledgebot-dynamodb-mcp
     
     steps:
     - name: Checkout code
@@ -63,12 +66,14 @@ jobs:
         aws ecr create-repository --repository-name knowledgebot-docling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-neo4j-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-openai-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-dynamodb-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         
         # Set lifecycle policy to keep only latest 10 images
         aws ecr put-lifecycle-policy --repository-name knowledgebot-docling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-openai-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-dynamodb-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
 
     - name: Set up Docker Buildx

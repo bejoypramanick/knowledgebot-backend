@@ -1,0 +1,27 @@
+# Official Pinecone MCP Server Dockerfile
+# Based on Node.js and the official @pinecone-database/mcp package
+
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install the official Pinecone MCP server globally
+RUN npm install -g @pinecone-database/mcp
+
+# Create a startup script
+RUN echo '#!/bin/sh\n\
+export PINECONE_API_KEY=${PINECONE_API_KEY}\n\
+export PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-east1-gcp}\n\
+npx @pinecone-database/mcp --port ${PORT:-3000} --host ${HOST:-0.0.0.0}\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Expose the MCP server port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Start the Pinecone MCP server
+CMD ["/app/start.sh"]
