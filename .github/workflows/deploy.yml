@@ -38,11 +38,8 @@ jobs:
                       - name: pinecone-mcp
                         dockerfile: Dockerfile.pinecone-mcp
                         image: knowledgebot-pinecone-mcp
-                      - name: openai-pinecone
-                        dockerfile: Dockerfile.openai-pinecone
-                        image: knowledgebot-openai-pinecone-mcp
-                      - name: dynamodb
-                        dockerfile: Dockerfile.dynamodb-library
+                      - name: dynamodb-mcp
+                        dockerfile: Dockerfile.dynamodb-mcp
                         image: knowledgebot-dynamodb-mcp
     
     steps:
@@ -66,14 +63,12 @@ jobs:
         aws ecr create-repository --repository-name knowledgebot-docling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-neo4j-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
-        aws ecr create-repository --repository-name knowledgebot-openai-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         aws ecr create-repository --repository-name knowledgebot-dynamodb-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         
         # Set lifecycle policy to keep only latest 10 images
         aws ecr put-lifecycle-policy --repository-name knowledgebot-docling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
-        aws ecr put-lifecycle-policy --repository-name knowledgebot-openai-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
         aws ecr put-lifecycle-policy --repository-name knowledgebot-dynamodb-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
 
     - name: Set up Docker Buildx

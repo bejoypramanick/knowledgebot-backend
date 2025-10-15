@@ -1,0 +1,20 @@
+# Official DynamoDB MCP Server Dockerfile
+# Based on the official awslabs/dynamodb-mcp-server Docker image
+
+FROM awslabs/dynamodb-mcp-server:latest
+
+# Set environment variables
+ENV AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+ENV AWS_REGION=${AWS_REGION:-us-east-1}
+ENV PORT=${PORT:-3000}
+ENV HOST=${HOST:-0.0.0.0}
+
+# Expose the MCP server port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# The official image already has the correct CMD
