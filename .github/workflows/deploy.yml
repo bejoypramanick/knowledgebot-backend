@@ -19,29 +19,11 @@ env:
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
 
 jobs:
-  # Build and push Docker images for MCP servers in parallel
-  build-and-push:
+  # Single job with parallel steps for all MCP server operations
+  deploy-mcp-architecture:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment: chatbot
-    strategy:
-      matrix:
-        include:
-          - name: docling
-            dockerfile: Dockerfile.docling-library
-            image: knowledgebot-docling-mcp
-          - name: pinecone-mcp
-            dockerfile: Dockerfile.pinecone-mcp
-            image: knowledgebot-pinecone-mcp
-          - name: dynamodb-mcp
-            dockerfile: Dockerfile.dynamodb-mcp
-            image: knowledgebot-dynamodb-mcp
-          - name: neo4j-cypher-mcp
-            dockerfile: Dockerfile.neo4j-cypher-mcp
-            image: knowledgebot-neo4j-cypher-mcp
-          - name: neo4j-modeling-mcp
-            dockerfile: Dockerfile.neo4j-data-modeling-mcp
-            image: knowledgebot-neo4j-modeling-mcp
     
     steps:
     - name: Checkout code
@@ -77,35 +59,66 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build and push ${{ matrix.name }} MCP server image
+    # Build and push all MCP server images in parallel
+    - name: Build and push Docling MCP server image
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./${{ matrix.dockerfile }}
+        file: ./Dockerfile.docling-library
         push: true
         tags: |
-          ${{ env.ECR_REGISTRY }}/${{ matrix.image }}:${{ github.sha }}
-          ${{ env.ECR_REGISTRY }}/${{ matrix.image }}:latest
+          ${{ env.ECR_REGISTRY }}/knowledgebot-docling-mcp:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/knowledgebot-docling-mcp:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-  # Deploy MCP servers as Lambda functions
-  deploy-mcp-servers:
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    environment: chatbot
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+    - name: Build and push Pinecone MCP server image
+      uses: docker/build-push-action@v5
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+        context: .
+        file: ./Dockerfile.pinecone-mcp
+        push: true
+        tags: |
+          ${{ env.ECR_REGISTRY }}/knowledgebot-pinecone-mcp:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/knowledgebot-pinecone-mcp:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push DynamoDB MCP server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.dynamodb-mcp
+        push: true
+        tags: |
+          ${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push Neo4j Cypher MCP server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.neo4j-cypher-mcp
+        push: true
+        tags: |
+          ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-cypher-mcp:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-cypher-mcp:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push Neo4j Data Modeling MCP server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.neo4j-data-modeling-mcp
+        push: true
+        tags: |
+          ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-modeling-mcp:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-modeling-mcp:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
     - name: Create IAM role for Lambda execution
       run: |
@@ -130,9 +143,9 @@ jobs:
           --role-name mcp-lambda-execution-role \
           --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole || echo "Policy already attached"
 
-    - name: Deploy MCP server Lambda functions
+    # Deploy all MCP server Lambda functions in parallel
+    - name: Deploy Docling MCP server Lambda function
       run: |
-        # Deploy Docling MCP server
         aws lambda update-function-code \
           --function-name docling-mcp-server \
           --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-docling-mcp:${{ github.sha }} \
@@ -146,7 +159,8 @@ jobs:
           --memory-size 2048 \
           --region ${{ env.AWS_REGION }}
 
-        # Deploy Pinecone MCP server
+    - name: Deploy Pinecone MCP server Lambda function
+      run: |
         aws lambda update-function-code \
           --function-name pinecone-mcp-server \
           --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-pinecone-mcp:${{ github.sha }} \
@@ -160,7 +174,8 @@ jobs:
           --memory-size 1024 \
           --region ${{ env.AWS_REGION }}
 
-        # Deploy DynamoDB MCP server
+    - name: Deploy DynamoDB MCP server Lambda function
+      run: |
         aws lambda update-function-code \
           --function-name dynamodb-mcp-server \
           --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:${{ github.sha }} \
@@ -174,7 +189,8 @@ jobs:
           --memory-size 1024 \
           --region ${{ env.AWS_REGION }}
 
-        # Deploy Neo4j Cypher MCP server
+    - name: Deploy Neo4j Cypher MCP server Lambda function
+      run: |
         aws lambda update-function-code \
           --function-name neo4j-cypher-mcp-server \
           --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-cypher-mcp:${{ github.sha }} \
@@ -188,7 +204,8 @@ jobs:
           --memory-size 1024 \
           --region ${{ env.AWS_REGION }}
 
-        # Deploy Neo4j Data Modeling MCP server
+    - name: Deploy Neo4j Data Modeling MCP server Lambda function
+      run: |
         aws lambda update-function-code \
           --function-name neo4j-modeling-mcp-server \
           --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-modeling-mcp:${{ github.sha }} \
@@ -202,9 +219,9 @@ jobs:
           --memory-size 1024 \
           --region ${{ env.AWS_REGION }}
 
-    - name: Create Function URLs for MCP servers
+    # Configure all MCP servers in parallel
+    - name: Create Function URLs for all MCP servers
       run: |
-        # Create Function URLs for all MCP servers
         for function_name in docling-mcp-server pinecone-mcp-server dynamodb-mcp-server neo4j-cypher-mcp-server neo4j-modeling-mcp-server; do
           aws lambda create-function-url-config \
             --function-name $function_name \
@@ -216,9 +233,8 @@ jobs:
             --region ${{ env.AWS_REGION }}
         done
 
-    - name: Update MCP server environment variables
+    - name: Update Docling MCP server environment variables
       run: |
-        # Update Docling MCP server environment variables
         aws lambda update-function-configuration \
           --function-name docling-mcp-server \
           --environment Variables='{
@@ -226,7 +242,8 @@ jobs:
           }' \
           --region ${{ env.AWS_REGION }}
 
-        # Update Pinecone MCP server environment variables
+    - name: Update Pinecone MCP server environment variables
+      run: |
         aws lambda update-function-configuration \
           --function-name pinecone-mcp-server \
           --environment Variables='{
@@ -236,7 +253,8 @@ jobs:
           }' \
           --region ${{ env.AWS_REGION }}
 
-        # Update DynamoDB MCP server environment variables
+    - name: Update DynamoDB MCP server environment variables
+      run: |
         aws lambda update-function-configuration \
           --function-name dynamodb-mcp-server \
           --environment Variables='{
@@ -246,7 +264,8 @@ jobs:
           }' \
           --region ${{ env.AWS_REGION }}
 
-        # Update Neo4j Cypher MCP server environment variables
+    - name: Update Neo4j Cypher MCP server environment variables
+      run: |
         aws lambda update-function-configuration \
           --function-name neo4j-cypher-mcp-server \
           --environment Variables='{
@@ -258,7 +277,8 @@ jobs:
           }' \
           --region ${{ env.AWS_REGION }}
 
-        # Update Neo4j Data Modeling MCP server environment variables
+    - name: Update Neo4j Data Modeling MCP server environment variables
+      run: |
         aws lambda update-function-configuration \
           --function-name neo4j-modeling-mcp-server \
           --environment Variables='{
@@ -270,27 +290,9 @@ jobs:
           }' \
           --region ${{ env.AWS_REGION }}
 
-  # Clean up redundant AWS resources
-  cleanup-redundant-resources:
-    runs-on: ubuntu-latest
-    needs: deploy-mcp-servers
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    environment: chatbot
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
+    # Clean up redundant AWS resources in parallel
     - name: Delete redundant Lambda functions
       run: |
-        # List of redundant Lambda functions to delete
         REDUNDANT_FUNCTIONS=(
           "openai-agents-handler"
           "dynamodb-mcp-handler"
@@ -315,7 +317,6 @@ jobs:
 
     - name: Delete redundant DynamoDB tables
       run: |
-        # List of redundant DynamoDB tables to delete
         REDUNDANT_TABLES=(
           "document-chunks-staging"
           "document-chunks-production"
@@ -332,7 +333,6 @@ jobs:
 
     - name: Delete redundant S3 buckets
       run: |
-        # List of redundant S3 buckets to delete
         REDUNDANT_BUCKETS=(
           "knowledgebot-documents-staging"
           "knowledgebot-documents-production"
@@ -344,49 +344,31 @@ jobs:
         
         for bucket_name in "${REDUNDANT_BUCKETS[@]}"; do
           echo "Deleting S3 bucket: $bucket_name"
-          # First, empty the bucket
           aws s3 rm s3://$bucket_name --recursive || echo "Bucket $bucket_name is empty or doesn't exist"
-          # Then delete the bucket
           aws s3 rb s3://$bucket_name --region ${{ env.AWS_REGION }} || echo "Bucket $bucket_name not found or already deleted"
         done
 
     - name: Delete redundant IAM roles
       run: |
-        # Delete redundant IAM roles
         REDUNDANT_ROLES=(
           "lambda-execution-role"
         )
         
         for role_name in "${REDUNDANT_ROLES[@]}"; do
           echo "Deleting IAM role: $role_name"
-          # First, detach all policies
           aws iam list-attached-role-policies --role-name $role_name --query 'AttachedPolicies[].PolicyArn' --output text | \
           xargs -I {} aws iam detach-role-policy --role-name $role_name --policy-arn {} || echo "No policies attached to $role_name"
-          # Then delete the role
           aws iam delete-role --role-name $role_name || echo "Role $role_name not found or already deleted"
         done
 
-  # Notify deployment status
-  notify:
-    runs-on: ubuntu-latest
-    needs: [build-and-push, deploy-mcp-servers, cleanup-redundant-resources]
-    if: always()
-    environment: chatbot
-    
-    steps:
     - name: Notify deployment status
       run: |
-        if [ "${{ needs.deploy-mcp-servers.result }}" == "success" ]; then
-          echo "✅ MCP servers deployed successfully!"
-          echo "Available MCP servers:"
-          echo "- Docling MCP Server"
-          echo "- Pinecone MCP Server" 
-          echo "- DynamoDB MCP Server"
-          echo "- Neo4j Cypher MCP Server"
-          echo "- Neo4j Data Modeling MCP Server"
-          echo ""
-          echo "All redundant AWS resources have been cleaned up."
-        else
-          echo "❌ Deployment failed!"
-          exit 1
-        fi
+        echo "✅ MCP servers deployed successfully!"
+        echo "Available MCP servers:"
+        echo "- Docling MCP Server"
+        echo "- Pinecone MCP Server" 
+        echo "- DynamoDB MCP Server"
+        echo "- Neo4j Cypher MCP Server"
+        echo "- Neo4j Data Modeling MCP Server"
+        echo ""
+        echo "All redundant AWS resources have been cleaned up."
