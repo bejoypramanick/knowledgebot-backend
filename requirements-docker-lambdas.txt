@@ -8,8 +8,8 @@ pypdfium2>=4.0.0
 # Pinecone Library Handler  
 pinecone-client>=3.0.0
 
-# Neo4j Library Handler
-neo4j>=5.0.0
+# Neo4j Library Handler - REMOVED
+# Neo4j operations now handled by Neo4j MCP Server
 
 # OpenAI Library Handler
 openai>=1.0.0
@@ -17,10 +17,8 @@ openai>=1.0.0
 # OpenAI Agents SDK
 openai-agents>=0.1.0
 
-# Sentence Transformer Library Handler
-sentence-transformers>=2.2.0
-torch>=2.0.0
-transformers>=4.30.0
+# Sentence Transformer Library Handler - REMOVED
+# Embeddings are now handled directly by Pinecone MCP Server
 
 # Common dependencies
 boto3>=1.26.0

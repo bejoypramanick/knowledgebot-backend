@@ -22,7 +22,6 @@ This repository contains the backend services for KnowledgeBot, a comprehensive 
 | `pinecone-library-handler` | Pinecone library import & init | pinecone-client |
 | `neo4j-library-handler` | Neo4j library import & init | neo4j |
 | `openai-library-handler` | OpenAI library import & init | openai |
-| `sentence-transformer-library-handler` | Sentence Transformer import & init | sentence-transformers, torch |
 
 ### Zip Lambdas (Business Logic & CRUD)
 
@@ -42,7 +41,6 @@ microservices/
 ├── pinecone-library-handler.py         # Pinecone import & init
 ├── neo4j-library-handler.py            # Neo4j import & init
 ├── openai-library-handler.py           # OpenAI import & init
-├── sentence-transformer-library-handler.py # Sentence Transformer import & init
 │
 ├── # Zip Lambda Handlers (Business Logic)
 ├── document-processor-business-logic.py # Document processing pipeline
@@ -55,7 +53,6 @@ Dockerfile.docling-library
 Dockerfile.pinecone-library
 Dockerfile.neo4j-library
 Dockerfile.openai-library
-Dockerfile.sentence-transformer-library
 
 # Requirements
 requirements-docker-lambdas.txt         # Heavy library dependencies
@@ -74,22 +71,20 @@ requirements-zip-lambdas.txt            # Minimal business logic dependencies
 
 1. **S3 Event** → `document-processor-business-logic`
 2. **Download** document from S3
-3. **Call** `docling-library-handler` for document processing
+3. **Call** `docling-mcp-server` for document processing
 4. **Store** markdown to S3
-5. **Call** `sentence-transformer-library-handler` for embeddings
-6. **Store** chunks to DynamoDB
-7. **Call** `pinecone-library-handler` for vector storage
-8. **Call** `neo4j-library-handler` for graph relations
+5. **Call** `pinecone-mcp-server` for vector storage (with text-to-vector conversion)
+6. **Call** `dynamodb-mcp-server` for chunk storage
+7. **Call** `neo4j-cypher-mcp-server` for graph relations
 
 ### Chat Processing Pipeline
 
 1. **API Request** → `chat-orchestrator-business-logic`
-2. **Call** `sentence-transformer-library-handler` for query embedding
-3. **Call** `pinecone-library-handler` for vector search
-4. **Call** `neo4j-library-handler` for graph queries
-5. **Search** DynamoDB for additional context
-6. **Call** `openai-library-handler` for response generation
-7. **Return** comprehensive response
+2. **Call** `pinecone-mcp-server` for vector search (with text-to-vector conversion)
+3. **Call** `neo4j-cypher-mcp-server` for graph queries
+4. **Call** `dynamodb-mcp-server` for additional context
+5. **Call** `openai-library-handler` for response generation
+6. **Return** comprehensive response
 
 ## 🚀 Deployment
 
