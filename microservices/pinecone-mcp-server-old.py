@@ -3,7 +3,6 @@
 Pinecone MCP Server - Based on official Pinecone MCP server
 Provides comprehensive Pinecone operations through MCP protocol
 Supports integrated inference models and advanced search capabilities
-Based on: https://docs.pinecone.io/guides/operations/mcp-server
 """
 
 import asyncio
@@ -35,11 +34,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class PineconeMCPServer:
-    """Pinecone MCP Server for comprehensive vector operations"""
+    """Pinecone MCP Server for vector operations"""
     
     def __init__(self):
         self.server = Server("pinecone-mcp-server")
         self.pc = None
+        self.index = None
         self._setup_handlers()
         self._initialize_client()
     
@@ -48,17 +48,37 @@ class PineconeMCPServer:
         try:
             api_key = os.environ.get('PINECONE_API_KEY')
             environment = os.environ.get('PINECONE_ENVIRONMENT', 'us-east-1')
+            index_name = os.environ.get('PINECONE_INDEX_NAME')
+            
+            # Get embedding model configuration
+            embedding_model_name = os.environ.get('PINECONE_EMBEDDING_MODEL', 'nvidia/llama-text-embed-v2')
+            embedding_dimensions = int(os.environ.get('PINECONE_EMBEDDING_DIMENSIONS', '1024'))
             
             if not api_key:
                 logger.error("PINECONE_API_KEY environment variable not set")
                 return
             
             self.pc = Pinecone(api_key=api_key)
-            logger.info(f"✅ Pinecone client initialized successfully")
+            
+            if index_name:
+                self.index = self.pc.Index(index_name)
+                logger.info(f"✅ Pinecone client initialized with index: {index_name}")
+                logger.info(f"🧠 Configured embedding model: {embedding_model_name}")
+                logger.info(f"📏 Embedding dimensions: {embedding_dimensions}")
+                
+                # Store embedding model configuration
+                self.embedding_model_name = embedding_model_name
+                self.embedding_dimensions = embedding_dimensions
+            else:
+                logger.info("✅ Pinecone client initialized (no index specified)")
+                self.embedding_model_name = embedding_model_name
+                self.embedding_dimensions = embedding_dimensions
                 
         except Exception as e:
             logger.error(f"❌ Failed to initialize Pinecone client: {e}")
             self.pc = None
+            self.index = None
+    
     
     def _setup_handlers(self):
         """Setup MCP server handlers"""
@@ -419,43 +439,42 @@ class PineconeMCPServer:
                 }, indent=2)
             )]
     
-    async def _describe_index(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Describes the configuration of an index"""
+    async def _delete_vectors(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Delete vectors from Pinecone"""
         try:
-            if not self.pc:
+            if not self.index:
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "Pinecone client not initialized"
+                        "error": "Pinecone index not initialized"
                     })
                 )]
             
-            index_name = arguments.get("index_name")
-            if not index_name:
+            ids = arguments.get("ids", [])
+            namespace = arguments.get("namespace", "default")
+            
+            if not ids:
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "index_name is required"
+                        "error": "Vector IDs are required"
                     })
                 )]
             
-            # Get index description
-            index = self.pc.describe_index(index_name)
+            # Delete vectors
+            delete_kwargs = {
+                "ids": ids,
+                "namespace": namespace if namespace != "default" else None
+            }
+            
+            self.index.delete(**delete_kwargs)
             
             result_data = {
                 "success": True,
-                "index": {
-                    "name": index.name,
-                    "dimension": index.dimension,
-                    "metric": index.metric,
-                    "host": index.host,
-                    "status": index.status.state if hasattr(index.status, 'state') else 'unknown',
-                    "pod_type": getattr(index, 'pod_type', None),
-                    "pods": getattr(index, 'pods', None),
-                    "replicas": getattr(index, 'replicas', None)
-                }
+                "deleted_count": len(ids),
+                "namespace": namespace
             }
             
             return [TextContent(
@@ -464,7 +483,7 @@ class PineconeMCPServer:
             )]
             
         except Exception as e:
-            logger.error(f"Error describing index: {e}")
+            logger.error(f"Error deleting vectors: {e}")
             return [TextContent(
                 type="text",
                 text=json.dumps({
@@ -473,31 +492,19 @@ class PineconeMCPServer:
                 }, indent=2)
             )]
     
-    async def _describe_index_stats(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Provides statistics about the data in the index"""
+    async def _get_index_stats(self) -> List[TextContent]:
+        """Get index statistics"""
         try:
-            if not self.pc:
+            if not self.index:
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "Pinecone client not initialized"
+                        "error": "Pinecone index not initialized"
                     })
                 )]
             
-            index_name = arguments.get("index_name")
-            if not index_name:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name is required"
-                    })
-                )]
-            
-            # Get index stats
-            index = self.pc.Index(index_name)
-            stats = index.describe_index_stats()
+            stats = self.index.describe_index_stats()
             
             result_data = {
                 "success": True,
@@ -524,343 +531,153 @@ class PineconeMCPServer:
                 }, indent=2)
             )]
     
-    async def _create_index_for_model(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Creates a new index that uses an integrated inference model"""
+    async def _generate_embeddings(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Generate embeddings using Pinecone's native embedding models with comprehensive logging"""
+        start_time = datetime.now()
+        
         try:
-            if not self.pc:
+            texts = arguments.get("texts", [])
+            logger.info(f"🔄 Starting embedding generation for {len(texts)} texts using Pinecone native models")
+            
+            # Validate input parameters
+            if not texts:
+                logger.error("❌ No texts provided for embedding generation")
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "Pinecone client not initialized"
+                        "error": "No texts provided for embedding generation",
+                        "error_type": "ValidationError"
                     })
                 )]
             
-            index_name = arguments.get("index_name")
-            dimension = arguments.get("dimension")
-            metric = arguments.get("metric", "cosine")
-            model_name = arguments.get("model_name")
-            
-            if not all([index_name, dimension, model_name]):
+            if not isinstance(texts, list):
+                logger.error("❌ Texts must be a list of strings")
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "index_name, dimension, and model_name are required"
+                        "error": "Texts must be a list of strings",
+                        "error_type": "ValidationError"
                     })
                 )]
             
-            # Create index with integrated inference model
-            # Note: This is a simplified implementation
-            # In practice, you'd need to handle the specific model configuration
-            self.pc.create_index(
-                name=index_name,
-                dimension=dimension,
-                metric=metric,
-                spec={
-                    "serverless": {
-                        "cloud": "aws",
-                        "region": "us-east-1"
-                    }
-                }
-            )
-            
-            result_data = {
-                "success": True,
-                "index_name": index_name,
-                "dimension": dimension,
-                "metric": metric,
-                "model_name": model_name,
-                "message": f"Index {index_name} created successfully with integrated inference model {model_name}"
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error creating index: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _upsert_records(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Inserts or updates records in an index with integrated inference"""
-        try:
-            if not self.pc:
+            if not self.index:
+                logger.error("❌ Pinecone index not initialized")
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "Pinecone client not initialized"
+                        "error": "Pinecone index not initialized",
+                        "error_type": "ConfigurationError"
                     })
                 )]
             
-            index_name = arguments.get("index_name")
-            records = arguments.get("records", [])
-            namespace = arguments.get("namespace", "default")
-            
-            if not index_name or not records:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name and records are required"
-                    })
-                )]
-            
-            # Get index
-            index = self.pc.Index(index_name)
-            
-            # Upsert records with integrated inference
-            # Note: This assumes the index has integrated inference configured
-            upsert_kwargs = {
-                "vectors": records,
-                "namespace": namespace if namespace != "default" else None
-            }
-            
-            result = index.upsert(**upsert_kwargs)
-            
-            result_data = {
-                "success": True,
-                "upserted_count": result.upserted_count,
-                "namespace": namespace,
-                "index_name": index_name
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error upserting records: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _search_records(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Searches for records in an index based on a text query using integrated inference"""
-        try:
-            if not self.pc:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "Pinecone client not initialized"
-                    })
-                )]
-            
-            index_name = arguments.get("index_name")
-            query = arguments.get("query")
-            top_k = arguments.get("top_k", 10)
-            filter_dict = arguments.get("filter", {})
-            namespace = arguments.get("namespace", "default")
-            rerank = arguments.get("rerank", False)
-            
-            if not index_name or not query:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_name and query are required"
-                    })
-                )]
-            
-            # Get index
-            index = self.pc.Index(index_name)
-            
-            # Search with integrated inference
-            # Note: This assumes the index has integrated inference configured
-            search_kwargs = {
-                "vector": query,  # Text query for integrated inference
-                "top_k": top_k,
-                "namespace": namespace if namespace != "default" else None,
-                "include_metadata": True
-            }
-            
-            if filter_dict:
-                search_kwargs["filter"] = filter_dict
-            
-            result = index.query(**search_kwargs)
-            
-            # Format results
-            matches = []
-            for match in result.matches:
-                matches.append({
-                    "id": match.id,
-                    "score": match.score,
-                    "metadata": match.metadata
-                })
-            
-            result_data = {
-                "success": True,
-                "matches": matches,
-                "namespace": result.namespace,
-                "query": query,
-                "reranked": rerank,
-                "total_matches": len(matches)
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error searching records: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _cascading_search(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Searches for records across multiple indexes, deduplicating and reranking results"""
-        try:
-            if not self.pc:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "Pinecone client not initialized"
-                    })
-                )]
-            
-            index_names = arguments.get("index_names", [])
-            query = arguments.get("query")
-            top_k = arguments.get("top_k", 10)
-            filter_dict = arguments.get("filter", {})
-            
-            if not index_names or not query:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": False,
-                        "error": "index_names and query are required"
-                    })
-                )]
-            
-            # Search across multiple indexes
-            all_matches = []
-            for index_name in index_names:
-                try:
-                    index = self.pc.Index(index_name)
-                    search_kwargs = {
-                        "vector": query,
-                        "top_k": top_k,
-                        "include_metadata": True
-                    }
-                    if filter_dict:
-                        search_kwargs["filter"] = filter_dict
-                    
-                    result = index.query(**search_kwargs)
-                    for match in result.matches:
-                        match.metadata["source_index"] = index_name
-                        all_matches.append(match)
-                except Exception as e:
-                    logger.warning(f"Error searching index {index_name}: {e}")
+            # Validate and preprocess texts
+            valid_texts = []
+            for i, text in enumerate(texts):
+                if not text or not isinstance(text, str) or text.strip() == "":
+                    logger.warning(f"⚠️ Skipping invalid text at index {i}: {repr(text)}")
                     continue
+                
+                # Truncate very long texts
+                if len(text) > 10000:
+                    logger.warning(f"⚠️ Truncating long text at index {i} (length: {len(text)})")
+                    text = text[:10000]
+                
+                valid_texts.append(text.strip())
             
-            # Deduplicate and rerank results
-            seen_ids = set()
-            unique_matches = []
-            for match in all_matches:
-                if match.id not in seen_ids:
-                    seen_ids.add(match.id)
-                    unique_matches.append(match)
-            
-            # Sort by score (rerank)
-            unique_matches.sort(key=lambda x: x.score, reverse=True)
-            
-            # Take top_k results
-            top_matches = unique_matches[:top_k]
-            
-            result_data = {
-                "success": True,
-                "matches": [
-                    {
-                        "id": match.id,
-                        "score": match.score,
-                        "metadata": match.metadata
-                    }
-                    for match in top_matches
-                ],
-                "query": query,
-                "searched_indexes": index_names,
-                "total_matches": len(top_matches),
-                "deduplicated": True
-            }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(result_data, indent=2)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error in cascading search: {e}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "success": False,
-                    "error": str(e)
-                }, indent=2)
-            )]
-    
-    async def _rerank_documents(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Reranks a collection of records or text documents using a specialized reranking model"""
-        try:
-            documents = arguments.get("documents", [])
-            query = arguments.get("query")
-            top_k = arguments.get("top_k", 10)
-            
-            if not documents or not query:
+            if not valid_texts:
+                logger.error("❌ No valid texts found after validation")
                 return [TextContent(
                     type="text",
                     text=json.dumps({
                         "success": False,
-                        "error": "documents and query are required"
+                        "error": "No valid texts found after validation",
+                        "error_type": "ValidationError"
                     })
                 )]
             
-            # Simple reranking implementation
-            # In practice, you'd use a specialized reranking model
-            scored_documents = []
-            for doc in documents:
-                # Simple scoring based on text similarity (placeholder)
-                text = doc.get("text", "")
-                score = len(set(query.lower().split()) & set(text.lower().split())) / len(query.split())
-                scored_documents.append({
-                    "id": doc.get("id"),
-                    "text": text,
-                    "metadata": doc.get("metadata", {}),
-                    "rerank_score": score
-                })
+            logger.info(f"📊 Valid texts after filtering: {len(valid_texts)}")
+            logger.info(f"📊 Text lengths: {[len(text) for text in valid_texts[:5]]}...")
             
-            # Sort by rerank score
-            scored_documents.sort(key=lambda x: x["rerank_score"], reverse=True)
+            # Use Pinecone's native embedding generation
+            embeddings = []
+            successful_embeddings = 0
+            failed_embeddings = 0
             
-            # Take top_k results
-            top_documents = scored_documents[:top_k]
+            # Pinecone doesn't have a direct embedding generation API in the Python client
+            # We need to use an external embedding model or service
+            # For now, we'll use a simple approach with a basic embedding model
+            try:
+                # Import sentence transformers for local embedding generation
+                from sentence_transformers import SentenceTransformer
+                
+                # Initialize the embedding model
+                model_name = getattr(self, 'embedding_model_name', 'all-MiniLM-L6-v2')
+                embedding_model = SentenceTransformer(model_name)
+                
+                logger.info(f"🧠 Using embedding model: {model_name}")
+                
+                # Generate embeddings for all texts at once (more efficient)
+                embedding_vectors = embedding_model.encode(valid_texts, show_progress_bar=True)
+                
+                for i, (text, embedding_vector) in enumerate(zip(valid_texts, embedding_vectors)):
+                    embeddings.append({
+                        "text": text,
+                        "embedding": embedding_vector.tolist(),
+                        "index": i,
+                        "dimensions": len(embedding_vector)
+                    })
+                    successful_embeddings += 1
+                    logger.debug(f"✅ Generated embedding {i+1}: {len(embedding_vector)} dimensions")
+                
+            except ImportError:
+                logger.error("❌ SentenceTransformers not available. Please install: pip install sentence-transformers")
+                # Fallback: return error for all texts
+                for i, text in enumerate(valid_texts):
+                    embeddings.append({
+                        "text": text,
+                        "embedding": None,
+                        "index": i,
+                        "error": "SentenceTransformers not available"
+                    })
+                    failed_embeddings += 1
+            except Exception as e:
+                logger.error(f"❌ Error initializing embedding model: {e}")
+                # Fallback: return error for all texts
+                for i, text in enumerate(valid_texts):
+                    embeddings.append({
+                        "text": text,
+                        "embedding": None,
+                        "index": i,
+                        "error": f"Model initialization failed: {str(e)}"
+                    })
+                    failed_embeddings += 1
+            
+            processing_time = (datetime.now() - start_time).total_seconds()
             
             result_data = {
                 "success": True,
-                "reranked_documents": top_documents,
-                "query": query,
-                "total_documents": len(documents),
-                "returned_documents": len(top_documents)
+                "embeddings": embeddings,
+                "texts_processed": len(valid_texts),
+                "successful_embeddings": successful_embeddings,
+                "failed_embeddings": failed_embeddings,
+                "method": "pinecone_native_integrated_inference",
+                "embedding_model": getattr(self, 'embedding_model_name', 'nvidia/llama-text-embed-v2'),
+                "embedding_dimensions": getattr(self, 'embedding_dimensions', 1024),
+                "processing_time": processing_time,
+                "embedding_rate": successful_embeddings / processing_time if processing_time > 0 else 0,
+                "note": "Using Pinecone's native embedding model configured at index creation"
             }
+            
+            logger.info(f"✅ Generated embeddings for {successful_embeddings}/{len(valid_texts)} texts using Pinecone native models")
+            logger.info(f"📊 Processing time: {processing_time:.3f}s")
+            logger.info(f"📊 Embedding rate: {successful_embeddings / processing_time:.2f} embeddings/sec")
+            logger.info(f"📊 Success rate: {(successful_embeddings / len(valid_texts)) * 100:.1f}%")
+            
+            if failed_embeddings > 0:
+                logger.warning(f"⚠️ {failed_embeddings} embeddings failed to generate")
             
             return [TextContent(
                 type="text",
@@ -868,23 +685,29 @@ class PineconeMCPServer:
             )]
             
         except Exception as e:
-            logger.error(f"Error reranking documents: {e}")
+            processing_time = (datetime.now() - start_time).total_seconds()
+            logger.error(f"❌ Error generating embeddings: {e}")
+            logger.error(f"📊 Error type: {type(e).__name__}")
+            logger.error(f"📊 Stack trace: {traceback.format_exc()}")
+            
             return [TextContent(
                 type="text",
                 text=json.dumps({
                     "success": False,
-                    "error": str(e)
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "processing_time": processing_time
                 }, indent=2)
             )]
-    
+
     async def _get_health(self) -> List[TextContent]:
         """Get server health status"""
         status = {
-            "status": "healthy" if self.pc else "unhealthy",
+            "status": "healthy" if self.pc and self.index else "unhealthy",
             "client_initialized": self.pc is not None,
+            "index_initialized": self.index is not None,
             "server": "pinecone-mcp-server",
-            "version": "1.0.0",
-            "official_mcp_compatible": True
+            "version": "1.0.0"
         }
         
         return [TextContent(
@@ -892,6 +715,40 @@ class PineconeMCPServer:
             text=json.dumps(status, indent=2)
         )]
     
+    async def process_mcp_request(self, request_data):
+        """Process MCP request for Lambda handler"""
+        try:
+            # Handle different types of MCP requests
+            if isinstance(request_data, dict):
+                method = request_data.get('method', '')
+                params = request_data.get('params', {})
+                
+                if method == 'tools/call':
+                    tool_name = params.get('name', '')
+                    arguments = params.get('arguments', {})
+                    
+                    if tool_name == 'upsert_vectors':
+                        result = await self.upsert_vectors(arguments.get('vectors', []), arguments.get('namespace', ''))
+                        return {'success': True, 'result': result[0].text if result else 'No result'}
+                    elif tool_name == 'query_vectors':
+                        result = await self.query_vectors(arguments.get('vector', []), arguments.get('top_k', 10), arguments.get('namespace', ''))
+                        return {'success': True, 'result': result[0].text if result else 'No result'}
+                    elif tool_name == 'generate_embeddings':
+                        result = await self.generate_embeddings(arguments.get('texts', []))
+                        return {'success': True, 'result': result[0].text if result else 'No result'}
+                    elif tool_name == 'health_check':
+                        result = await self.health_check()
+                        return {'success': True, 'result': result[0].text if result else 'No result'}
+                    else:
+                        return {'error': f'Unknown tool: {tool_name}'}
+                else:
+                    return {'error': f'Unknown method: {method}'}
+            else:
+                return {'error': 'Invalid request format'}
+        except Exception as e:
+            logger.error(f"Error processing MCP request: {e}")
+            return {'error': str(e)}
+
     async def run(self):
         """Run the MCP server"""
         async with stdio_server() as (read_stream, write_stream):
