@@ -1,9 +1,0 @@
-# Requirements for OpenAI Library Handler
-# Optimized for Lambda Docker environment
-
-# OpenAI client
-openai>=1.0.0
-
-# Common dependencies
-boto3>=1.26.0
-botocore>=1.29.0

@@ -1,0 +1,627 @@
+name: Deploy KnowledgeBot Backend
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+
+jobs:
+  # Build and push Docker images for MCP servers in parallel
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment: chatbot
+                strategy:
+                  matrix:
+                    include:
+                      - name: docling
+                        dockerfile: Dockerfile.docling-library
+                        image: knowledgebot-docling-mcp
+                      - name: neo4j-cypher-mcp
+                        dockerfile: Dockerfile.neo4j-cypher-mcp
+                        image: knowledgebot-neo4j-cypher-mcp
+                      - name: neo4j-modeling-mcp
+                        dockerfile: Dockerfile.neo4j-data-modeling-mcp
+                        image: knowledgebot-neo4j-modeling-mcp
+                      - name: pinecone-mcp
+                        dockerfile: Dockerfile.pinecone-mcp
+                        image: knowledgebot-pinecone-mcp
+                      - name: dynamodb-mcp
+                        dockerfile: Dockerfile.dynamodb-mcp
+                        image: knowledgebot-dynamodb-mcp
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Create ECR repositories
+      run: |
+        # Create ECR repositories for all MCP servers
+        aws ecr create-repository --repository-name knowledgebot-docling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-neo4j-cypher-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-neo4j-modeling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        aws ecr create-repository --repository-name knowledgebot-dynamodb-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        
+        # Set lifecycle policy to keep only latest 10 images
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-docling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-cypher-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-modeling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-dynamodb-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push ${{ matrix.name }} MCP server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./${{ matrix.dockerfile }}
+        push: true
+        tags: |
+          ${{ env.ECR_REGISTRY }}/${{ matrix.image }}:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/${{ matrix.image }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Deploy to AWS Lambda
+  deploy-lambda:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment: chatbot
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install AWS CLI dependencies
+      run: |
+        pip install boto3 botocore
+
+    - name: Create AWS Resources
+      run: |
+        # Create S3 buckets
+        aws s3 mb s3://knowledgebot-documents-${{ github.event.inputs.environment || 'staging' }} --region ${{ env.AWS_REGION }} || echo "Bucket already exists"
+        aws s3 mb s3://processed-documents-${{ github.event.inputs.environment || 'staging' }} --region ${{ env.AWS_REGION }} || echo "Bucket already exists"
+        aws s3 mb s3://knowledgebot-error-logs-${{ github.event.inputs.environment || 'staging' }} --region ${{ env.AWS_REGION }} || echo "Bucket already exists"
+        
+        # Create DynamoDB tables
+        aws dynamodb create-table \
+          --table-name document-chunks-${{ github.event.inputs.environment || 'staging' }} \
+          --attribute-definitions \
+            AttributeName=chunk_id,AttributeType=S \
+            AttributeName=document_id,AttributeType=S \
+          --key-schema \
+            AttributeName=chunk_id,KeyType=HASH \
+            AttributeName=document_id,KeyType=RANGE \
+          --billing-mode PAY_PER_REQUEST \
+          --region ${{ env.AWS_REGION }} || echo "Table already exists"
+        
+        aws dynamodb create-table \
+          --table-name knowledgebot-error-logs-${{ github.event.inputs.environment || 'staging' }} \
+          --attribute-definitions \
+            AttributeName=error_id,AttributeType=S \
+            AttributeName=timestamp,AttributeType=S \
+          --key-schema \
+            AttributeName=error_id,KeyType=HASH \
+            AttributeName=timestamp,KeyType=RANGE \
+          --billing-mode PAY_PER_REQUEST \
+          --region ${{ env.AWS_REGION }} || echo "Table already exists"
+        
+        # Create IAM role for Lambda execution
+        aws iam create-role \
+          --role-name lambda-execution-role \
+          --assume-role-policy-document '{
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "lambda.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }' || echo "Role already exists"
+        
+        # Attach policies to Lambda execution role
+        aws iam attach-role-policy \
+          --role-name lambda-execution-role \
+          --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole || echo "Policy already attached"
+        
+        aws iam attach-role-policy \
+          --role-name lambda-execution-role \
+          --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess || echo "Policy already attached"
+        
+        aws iam attach-role-policy \
+          --role-name lambda-execution-role \
+          --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess || echo "Policy already attached"
+        
+        aws iam attach-role-policy \
+          --role-name lambda-execution-role \
+          --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole || echo "Policy already attached"
+
+    - name: Deploy MCP server Lambda functions
+      run: |
+        # Deploy Docling MCP server
+        aws lambda update-function-code \
+          --function-name docling-mcp-server \
+          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-docling-mcp:${{ github.sha }} \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name docling-mcp-server \
+          --package-type Image \
+          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-docling-mcp:${{ github.sha }} \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --timeout 900 \
+          --memory-size 2048 \
+          --region ${{ env.AWS_REGION }}
+
+        # Update Docling MCP server environment variables
+        aws lambda update-function-configuration \
+          --function-name docling-mcp-server \
+          --environment Variables='{
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+
+        # Deploy Neo4j MCP server
+        aws lambda update-function-code \
+          --function-name neo4j-mcp-server \
+          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-mcp:${{ github.sha }} \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name neo4j-mcp-server \
+          --package-type Image \
+          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-mcp:${{ github.sha }} \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --timeout 900 \
+          --memory-size 1024 \
+          --region ${{ env.AWS_REGION }}
+
+        # Update Neo4j MCP server environment variables
+        aws lambda update-function-configuration \
+          --function-name neo4j-mcp-server \
+          --environment Variables='{
+            "NEO4J_URI":"${{ secrets.NEO4J_URI }}",
+            "NEO4J_USER":"${{ secrets.NEO4J_USER }}",
+            "NEO4J_PASSWORD":"${{ secrets.NEO4J_PASSWORD }}",
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+
+        # Deploy Pinecone MCP server
+        aws lambda update-function-code \
+          --function-name pinecone-mcp-server \
+          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-pinecone-mcp:${{ github.sha }} \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name pinecone-mcp-server \
+          --package-type Image \
+          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-pinecone-mcp:${{ github.sha }} \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --timeout 900 \
+          --memory-size 1024 \
+          --region ${{ env.AWS_REGION }}
+
+        # Deploy DynamoDB MCP server
+        aws lambda update-function-code \
+          --function-name dynamodb-mcp-server \
+          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:${{ github.sha }} \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name dynamodb-mcp-server \
+          --package-type Image \
+          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:${{ github.sha }} \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --timeout 900 \
+          --memory-size 1024 \
+          --region ${{ env.AWS_REGION }}
+
+        # Create deployment packages for Python functions
+        cd microservices
+        zip -r openai-agents-handler.zip openai-mcp-server.py
+        zip -r dynamodb-mcp-handler.zip dynamodb-mcp-handler.py
+        zip -r chat-orchestrator-websocket.zip chat-orchestrator-websocket.py
+        zip -r document-processor-business-logic.zip document-processor-business-logic.py
+        zip -r s3-unified-handler.zip s3-unified-handler.py
+        zip -r error-logger-handler.zip error-logger-handler.py
+        zip -r error-query-handler.zip error-query-handler.py
+        zip -r docling-library-handler.zip docling-library-handler.py
+        zip -r pinecone-library-handler.zip pinecone-library-handler.py
+        zip -r neo4j-library-handler.zip neo4j-library-handler.py
+        zip -r dynamodb-crud-handler.zip dynamodb-crud-handler.py
+        cd ..
+
+        # Deploy OpenAI Agents function
+        aws lambda update-function-code \
+          --function-name openai-agents-handler \
+          --zip-file fileb://microservices/openai-agents-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name openai-agents-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler openai-mcp-server.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --region ${{ env.AWS_REGION }}
+
+        # Deploy DynamoDB MCP handler
+        aws lambda update-function-code \
+          --function-name dynamodb-mcp-handler \
+          --zip-file fileb://microservices/dynamodb-mcp-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name dynamodb-mcp-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler dynamodb-mcp-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --region ${{ env.AWS_REGION }}
+
+        # Create Lambda function URL for Pinecone MCP server
+        aws lambda create-function-url-config \
+          --function-name pinecone-mcp-server \
+          --auth-type NONE \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda update-function-url-config \
+          --function-name pinecone-mcp-server \
+          --auth-type NONE \
+          --region ${{ env.AWS_REGION }}
+
+        # Get Pinecone MCP server URL
+        PINECONE_URL=$(aws lambda get-function-url-config \
+          --function-name pinecone-mcp-server \
+          --region ${{ env.AWS_REGION }} \
+          --query 'FunctionUrl' \
+          --output text)
+
+        # Update Pinecone MCP server environment variables
+        aws lambda update-function-configuration \
+          --function-name pinecone-mcp-server \
+          --environment Variables='{
+            "PINECONE_API_KEY":"${{ secrets.PINECONE_API_KEY }}",
+            "PINECONE_ENVIRONMENT":"${{ secrets.PINECONE_ENVIRONMENT }}",
+            "PINECONE_INDEX_NAME":"${{ secrets.PINECONE_INDEX_NAME }}",
+            "PINECONE_EMBEDDING_MODEL":"${{ secrets.PINECONE_EMBEDDING_MODEL }}",
+            "PINECONE_EMBEDDING_DIMENSIONS":"${{ secrets.PINECONE_EMBEDDING_DIMENSIONS }}",
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+
+        # Create Lambda function URL for DynamoDB MCP server
+        aws lambda create-function-url-config \
+          --function-name dynamodb-mcp-server \
+          --auth-type NONE \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda update-function-url-config \
+          --function-name dynamodb-mcp-server \
+          --auth-type NONE \
+          --region ${{ env.AWS_REGION }}
+
+        # Get DynamoDB MCP server URL
+        DYNAMODB_URL=$(aws lambda get-function-url-config \
+          --function-name dynamodb-mcp-server \
+          --region ${{ env.AWS_REGION }} \
+          --query 'FunctionUrl' \
+          --output text)
+
+        # Update DynamoDB MCP server environment variables
+        aws lambda update-function-configuration \
+          --function-name dynamodb-mcp-server \
+          --environment Variables='{
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+
+        # Update OpenAI Agents handler environment variables
+        aws lambda update-function-configuration \
+          --function-name openai-agents-handler \
+          --environment Variables='{
+            "OPENAI_API_KEY":"${{ secrets.OPENAI_API_KEY }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+
+        # Update DynamoDB MCP handler environment variables
+        aws lambda update-function-configuration \
+          --function-name dynamodb-mcp-handler \
+          --environment Variables='{
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Deploy WebSocket API and Lambda Functions
+      run: |
+        # Deploy WebSocket API Gateway
+        aws apigatewayv2 create-api \
+          --name knowledgebot-websocket-${{ github.event.inputs.environment || 'staging' }} \
+          --protocol-type WEBSOCKET \
+          --route-selection-expression '$request.body.action' \
+          --region ${{ env.AWS_REGION }} || \
+        echo "WebSocket API already exists or created successfully"
+        
+        # Get WebSocket API ID
+        WEBSOCKET_API_ID=$(aws apigatewayv2 get-apis \
+          --query 'Items[?Name==`knowledgebot-websocket-${{ github.event.inputs.environment || 'staging' }}`].ApiId' \
+          --output text \
+          --region ${{ env.AWS_REGION }})
+        
+        echo "WebSocket API ID: $WEBSOCKET_API_ID"
+        
+        # Deploy Chat Orchestrator Lambda
+        aws lambda update-function-code \
+          --function-name chat-orchestrator-websocket \
+          --zip-file fileb://microservices/chat-orchestrator-websocket.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name chat-orchestrator-websocket \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler chat-orchestrator-websocket.lambda_handler \
+          --timeout 900 \
+          --memory-size 1024 \
+          --environment Variables='{
+            "PINECONE_LIBRARY_FUNCTION":"pinecone-library-handler",
+            "OPENAI_AGENTS_FUNCTION":"openai-mcp-server",
+            "DOCLING_MCP_SERVER_FUNCTION":"docling-mcp-server",
+            "NEO4J_MCP_SERVER_FUNCTION":"neo4j-mcp-server",
+            "DYNAMODB_MCP_FUNCTION":"dynamodb-mcp-handler"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy Document Processor Lambda
+        aws lambda update-function-code \
+          --function-name document-processor \
+          --zip-file fileb://microservices/document-processor-business-logic.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name document-processor \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler document-processor-business-logic.lambda_handler \
+          --timeout 900 \
+          --memory-size 1024 \
+          --environment Variables='{
+            "DOCUMENTS_BUCKET":"knowledgebot-documents-${{ github.event.inputs.environment || 'staging' }}",
+            "PROCESSED_DOCUMENTS_BUCKET":"processed-documents-${{ github.event.inputs.environment || 'staging' }}",
+            "CHUNKS_TABLE":"document-chunks-${{ github.event.inputs.environment || 'staging' }}",
+            "DOCLING_LIBRARY_FUNCTION":"docling-mcp-server",
+            "PINECONE_LIBRARY_FUNCTION":"pinecone-mcp-server",
+            "NEO4J_LIBRARY_FUNCTION":"neo4j-mcp-server",
+            "DYNAMODB_MCP_FUNCTION":"dynamodb-mcp-handler"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy S3 Unified Handler Lambda
+        aws lambda update-function-code \
+          --function-name s3-unified-handler \
+          --zip-file fileb://microservices/s3-unified-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name s3-unified-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler s3-unified-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --environment Variables='{
+            "DOCUMENTS_BUCKET":"knowledgebot-documents-${{ github.event.inputs.environment || 'staging' }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy Error Logger Lambda
+        aws lambda update-function-code \
+          --function-name error-logger-handler \
+          --zip-file fileb://microservices/error-logger-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name error-logger-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler error-logger-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --environment Variables='{
+            "ERROR_TABLE":"knowledgebot-error-logs-${{ github.event.inputs.environment || 'staging' }}",
+            "ERROR_BUCKET":"knowledgebot-error-logs-${{ github.event.inputs.environment || 'staging' }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy Error Query Lambda
+        aws lambda update-function-code \
+          --function-name error-query-handler \
+          --zip-file fileb://microservices/error-query-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name error-query-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler error-query-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --environment Variables='{
+            "ERROR_TABLE":"knowledgebot-error-logs-${{ github.event.inputs.environment || 'staging' }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy Docling Library Handler Lambda
+        aws lambda update-function-code \
+          --function-name docling-library-handler \
+          --zip-file fileb://microservices/docling-library-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name docling-library-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler docling-library-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --environment Variables='{
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy Pinecone Library Handler Lambda
+        aws lambda update-function-code \
+          --function-name pinecone-library-handler \
+          --zip-file fileb://microservices/pinecone-library-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name pinecone-library-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler pinecone-library-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --environment Variables='{
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy Neo4j Library Handler Lambda
+        aws lambda update-function-code \
+          --function-name neo4j-library-handler \
+          --zip-file fileb://microservices/neo4j-library-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name neo4j-library-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler neo4j-library-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --environment Variables='{
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+        
+        # Deploy DynamoDB CRUD Handler Lambda
+        aws lambda update-function-code \
+          --function-name dynamodb-crud-handler \
+          --zip-file fileb://microservices/dynamodb-crud-handler.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name dynamodb-crud-handler \
+          --runtime python3.11 \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler dynamodb-crud-handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 512 \
+          --environment Variables='{
+            "AWS_REGION":"${{ env.AWS_REGION }}"
+          }' \
+          --region ${{ env.AWS_REGION }}
+
+  # Run tests
+  test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements-docker-lambdas.txt
+        pip install pytest pytest-cov
+
+    - name: Run tests
+      run: |
+        # Add your test commands here
+        echo "Running tests..."
+        # pytest tests/ --cov=agent-toolkit --cov-report=xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: true
+
+  # Security scan
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Notify deployment status
+  notify:
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-lambda]
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment: chatbot
+    
+    steps:
+    - name: Notify deployment status
+      run: |
+        if [ "${{ needs.deploy-lambda.result }}" == "success" ]; then
+          echo "✅ Deployment successful!"
+          # Add your notification logic here (Slack, email, etc.)
+        else
+          echo "❌ Deployment failed!"
+          # Add your failure notification logic here
+        fi
