@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import traceback
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # MCP imports
@@ -512,63 +513,57 @@ class PineconeMCPServer:
             logger.info(f"📊 Valid texts after filtering: {len(valid_texts)}")
             logger.info(f"📊 Text lengths: {[len(text) for text in valid_texts[:5]]}...")
             
-            # Use Pinecone's integrated inference for native embedding generation
+            # Use Pinecone's native embedding generation
             embeddings = []
             successful_embeddings = 0
             failed_embeddings = 0
             
-            for i, text in enumerate(valid_texts):
-                try:
-                    logger.debug(f"🔄 Processing text {i+1}/{len(valid_texts)} (length: {len(text)})")
-                    
-                    # Query with text input - Pinecone will generate embeddings using native models
-                    query_result = self.index.query(
-                        vector=text,  # Pass text directly - Pinecone will embed it
-                        top_k=1,
-                        include_values=True,
-                        include_metadata=False
-                    )
-                    
-                    if query_result.matches and len(query_result.matches) > 0:
-                        # Extract the generated embedding
-                        embedding_vector = query_result.matches[0].values
-                        
-                        # Validate embedding vector
-                        if isinstance(embedding_vector, list) and len(embedding_vector) > 0:
-                            embeddings.append({
-                                "text": text,
-                                "embedding": embedding_vector,
-                                "index": i,
-                                "dimensions": len(embedding_vector)
-                            })
-                            successful_embeddings += 1
-                            logger.debug(f"✅ Generated embedding {i+1}: {len(embedding_vector)} dimensions")
-                        else:
-                            logger.warning(f"⚠️ Invalid embedding vector for text {i+1}: {type(embedding_vector)}")
-                            embeddings.append({
-                                "text": text,
-                                "embedding": None,
-                                "index": i,
-                                "error": "Invalid embedding vector"
-                            })
-                            failed_embeddings += 1
-                    else:
-                        logger.warning(f"⚠️ No matches returned for text {i+1}")
-                        embeddings.append({
-                            "text": text,
-                            "embedding": None,
-                            "index": i,
-                            "error": "No matches returned"
-                        })
-                        failed_embeddings += 1
-                        
-                except Exception as e:
-                    logger.warning(f"⚠️ Error generating embedding for text {i+1}: {e}")
+            # Pinecone doesn't have a direct embedding generation API in the Python client
+            # We need to use an external embedding model or service
+            # For now, we'll use a simple approach with a basic embedding model
+            try:
+                # Import sentence transformers for local embedding generation
+                from sentence_transformers import SentenceTransformer
+                
+                # Initialize the embedding model
+                model_name = getattr(self, 'embedding_model_name', 'all-MiniLM-L6-v2')
+                embedding_model = SentenceTransformer(model_name)
+                
+                logger.info(f"🧠 Using embedding model: {model_name}")
+                
+                # Generate embeddings for all texts at once (more efficient)
+                embedding_vectors = embedding_model.encode(valid_texts, show_progress_bar=True)
+                
+                for i, (text, embedding_vector) in enumerate(zip(valid_texts, embedding_vectors)):
+                    embeddings.append({
+                        "text": text,
+                        "embedding": embedding_vector.tolist(),
+                        "index": i,
+                        "dimensions": len(embedding_vector)
+                    })
+                    successful_embeddings += 1
+                    logger.debug(f"✅ Generated embedding {i+1}: {len(embedding_vector)} dimensions")
+                
+            except ImportError:
+                logger.error("❌ SentenceTransformers not available. Please install: pip install sentence-transformers")
+                # Fallback: return error for all texts
+                for i, text in enumerate(valid_texts):
                     embeddings.append({
                         "text": text,
                         "embedding": None,
                         "index": i,
-                        "error": str(e)
+                        "error": "SentenceTransformers not available"
+                    })
+                    failed_embeddings += 1
+            except Exception as e:
+                logger.error(f"❌ Error initializing embedding model: {e}")
+                # Fallback: return error for all texts
+                for i, text in enumerate(valid_texts):
+                    embeddings.append({
+                        "text": text,
+                        "embedding": None,
+                        "index": i,
+                        "error": f"Model initialization failed: {str(e)}"
                     })
                     failed_embeddings += 1
             
