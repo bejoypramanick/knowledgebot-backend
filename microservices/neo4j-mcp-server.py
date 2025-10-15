@@ -284,11 +284,83 @@ class Neo4jMCPServer:
                     )
                 )
             )
+    
+    async def process_mcp_request(self, request_data):
+        """Process MCP request for Lambda handler"""
+        try:
+            # Handle different types of MCP requests
+            if isinstance(request_data, dict):
+                method = request_data.get('method', '')
+                params = request_data.get('params', {})
+                
+                if method == 'tools/call':
+                    tool_name = params.get('name', '')
+                    arguments = params.get('arguments', {})
+                    
+                    if tool_name == 'execute_cypher':
+                        result = await self.execute_cypher(arguments.get('query', ''), arguments.get('parameters', {}))
+                        return {'success': True, 'result': result[0].text if result else 'No result'}
+                    elif tool_name == 'health_check':
+                        result = await self.health_check()
+                        return {'success': True, 'result': result[0].text if result else 'No result'}
+                    else:
+                        return {'error': f'Unknown tool: {tool_name}'}
+                else:
+                    return {'error': f'Unknown method: {method}'}
+            else:
+                return {'error': 'Invalid request format'}
+        except Exception as e:
+            logger.error(f"Error processing MCP request: {e}")
+            return {'error': str(e)}
 
 async def main():
     """Main entry point"""
     server = Neo4jMCPServer()
     await server.run()
+
+def lambda_handler(event, context):
+    """AWS Lambda handler for Neo4j MCP server"""
+    try:
+        # Initialize the MCP server
+        server = Neo4jMCPServer()
+        
+        # Handle HTTP requests (for Lambda Function URL)
+        if 'httpMethod' in event:
+            # HTTP request from Lambda Function URL
+            body = json.loads(event.get('body', '{}'))
+            
+            # Route to appropriate handler
+            if event['httpMethod'] == 'GET' and event['path'] == '/health':
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'status': 'healthy', 'service': 'neo4j-mcp-server'})
+                }
+            elif event['httpMethod'] == 'POST' and event['path'] == '/mcp':
+                # Handle MCP protocol requests
+                result = asyncio.run(server.process_mcp_request(body))
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps(result)
+                }
+            else:
+                return {
+                    'statusCode': 404,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'error': 'Not found'})
+                }
+        else:
+            # Direct invocation
+            return asyncio.run(server.process_mcp_request(event))
+            
+    except Exception as e:
+        logging.error(f"Lambda handler error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps({'error': str(e)})
+        }
 
 if __name__ == "__main__":
     asyncio.run(main())

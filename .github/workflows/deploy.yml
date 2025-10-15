@@ -201,8 +201,7 @@ jobs:
         aws lambda update-function-configuration \
           --function-name docling-mcp-server \
           --environment Variables='{
-            "DOCLING_MCP_SERVER_URL":"${{ secrets.DOCLING_MCP_SERVER_URL }}",
-            "DOCLING_MCP_SERVER_TIMEOUT":"${{ secrets.DOCLING_MCP_SERVER_TIMEOUT }}"
+            "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
 
@@ -224,11 +223,10 @@ jobs:
         aws lambda update-function-configuration \
           --function-name neo4j-mcp-server \
           --environment Variables='{
-            "NEO4J_MCP_SERVER_URL":"${{ secrets.NEO4J_MCP_SERVER_URL }}",
-            "NEO4J_MCP_SERVER_TIMEOUT":"${{ secrets.NEO4J_MCP_SERVER_TIMEOUT }}",
             "NEO4J_URI":"${{ secrets.NEO4J_URI }}",
             "NEO4J_USER":"${{ secrets.NEO4J_USER }}",
-            "NEO4J_PASSWORD":"${{ secrets.NEO4J_PASSWORD }}"
+            "NEO4J_PASSWORD":"${{ secrets.NEO4J_PASSWORD }}",
+            "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
 
@@ -324,11 +322,12 @@ jobs:
         aws lambda update-function-configuration \
           --function-name pinecone-mcp-server \
           --environment Variables='{
-            "PINECONE_MCP_SERVER_URL":"'$PINECONE_URL'",
-            "PINECONE_MCP_SERVER_TIMEOUT":"${{ secrets.PINECONE_MCP_SERVER_TIMEOUT }}",
             "PINECONE_API_KEY":"${{ secrets.PINECONE_API_KEY }}",
             "PINECONE_ENVIRONMENT":"${{ secrets.PINECONE_ENVIRONMENT }}",
-            "PINECONE_INDEX_NAME":"${{ secrets.PINECONE_INDEX_NAME }}"
+            "PINECONE_INDEX_NAME":"${{ secrets.PINECONE_INDEX_NAME }}",
+            "PINECONE_EMBEDDING_MODEL":"${{ secrets.PINECONE_EMBEDDING_MODEL }}",
+            "PINECONE_EMBEDDING_DIMENSIONS":"${{ secrets.PINECONE_EMBEDDING_DIMENSIONS }}",
+            "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
 
@@ -353,8 +352,6 @@ jobs:
         aws lambda update-function-configuration \
           --function-name dynamodb-mcp-server \
           --environment Variables='{
-            "DYNAMODB_MCP_SERVER_URL":"'$DYNAMODB_URL'",
-            "DYNAMODB_MCP_SERVER_TIMEOUT":"${{ secrets.DYNAMODB_MCP_SERVER_TIMEOUT }}",
             "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
@@ -371,8 +368,6 @@ jobs:
         aws lambda update-function-configuration \
           --function-name dynamodb-mcp-handler \
           --environment Variables='{
-            "DYNAMODB_MCP_SERVER_URL":"'$DYNAMODB_URL'",
-            "DYNAMODB_MCP_SERVER_TIMEOUT":"${{ secrets.DYNAMODB_MCP_SERVER_TIMEOUT }}",
             "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
@@ -504,8 +499,7 @@ jobs:
           --timeout 300 \
           --memory-size 512 \
           --environment Variables='{
-            "DOCLING_MCP_SERVER_URL":"${{ secrets.DOCLING_MCP_SERVER_URL }}",
-            "DOCLING_MCP_SERVER_TIMEOUT":"${{ secrets.DOCLING_MCP_SERVER_TIMEOUT }}"
+            "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
         
@@ -522,11 +516,7 @@ jobs:
           --timeout 300 \
           --memory-size 512 \
           --environment Variables='{
-            "PINECONE_MCP_SERVER_URL":"${{ secrets.PINECONE_MCP_SERVER_URL }}",
-            "PINECONE_MCP_SERVER_TIMEOUT":"${{ secrets.PINECONE_MCP_SERVER_TIMEOUT }}",
-            "PINECONE_API_KEY":"${{ secrets.PINECONE_API_KEY }}",
-            "PINECONE_ENVIRONMENT":"${{ secrets.PINECONE_ENVIRONMENT }}",
-            "PINECONE_INDEX_NAME":"${{ secrets.PINECONE_INDEX_NAME }}"
+            "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
         
@@ -543,11 +533,7 @@ jobs:
           --timeout 300 \
           --memory-size 512 \
           --environment Variables='{
-            "NEO4J_MCP_SERVER_URL":"${{ secrets.NEO4J_MCP_SERVER_URL }}",
-            "NEO4J_MCP_SERVER_TIMEOUT":"${{ secrets.NEO4J_MCP_SERVER_TIMEOUT }}",
-            "NEO4J_URI":"${{ secrets.NEO4J_URI }}",
-            "NEO4J_USER":"${{ secrets.NEO4J_USER }}",
-            "NEO4J_PASSWORD":"${{ secrets.NEO4J_PASSWORD }}"
+            "AWS_REGION":"${{ env.AWS_REGION }}"
           }' \
           --region ${{ env.AWS_REGION }}
         
@@ -602,7 +588,7 @@ jobs:
   # Security scan
   security-scan:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request'
     
     steps:
     - name: Checkout code
