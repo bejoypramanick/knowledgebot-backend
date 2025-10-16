@@ -1,4 +1,4 @@
-name: Deploy KnowledgeBot Backend - Clean MCP Architecture
+name: Build DynamoDB MCP Server Docker Image
 
 on:
   push:
@@ -88,92 +88,25 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-  # Main deployment job - runs after all builds complete
-  deploy-mcp-architecture:
+  # Image build completion notification
+  notify-build-complete:
     runs-on: ubuntu-latest
     needs: [setup, build-mcp-servers]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment: chatbot
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION || env.AWS_REGION }}
-
-    - name: Create IAM role for Lambda execution
+    - name: Notify build completion
       run: |
-        # Create IAM role for Lambda execution
-        aws iam create-role \
-          --role-name mcp-lambda-execution-role \
-          --assume-role-policy-document '{
-            "Version": "2012-10-17",
-            "Statement": [
-              {
-                "Effect": "Allow",
-                "Principal": {
-                  "Service": "lambda.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-              }
-            ]
-          }' || echo "Role already exists"
-        
-        # Attach basic execution policy
-        aws iam attach-role-policy \
-          --role-name mcp-lambda-execution-role \
-          --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole || echo "Policy already attached"
-
-    # Deploy DynamoDB MCP server Lambda function only
-    - name: Deploy DynamoDB MCP server Lambda function
-      run: |
-        aws lambda update-function-code \
-          --function-name dynamodb-mcp-server \
-          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:${{ github.sha }} \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name dynamodb-mcp-server \
-          --package-type Image \
-          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:${{ github.sha }} \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --timeout 900 \
-          --memory-size 1024 \
-          --region ${{ env.AWS_REGION }}
-
-    # Configure DynamoDB MCP server
-    - name: Create Function URL for DynamoDB MCP server
-      run: |
-        aws lambda create-function-url-config \
-          --function-name dynamodb-mcp-server \
-          --auth-type NONE \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda update-function-url-config \
-          --function-name dynamodb-mcp-server \
-          --auth-type NONE \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Update DynamoDB MCP server environment variables
-      run: |
-        aws lambda update-function-configuration \
-          --function-name dynamodb-mcp-server \
-          --environment Variables='{
-            "AWS_ACCESS_KEY_ID":"${{ secrets.AWS_ACCESS_KEY_ID }}",
-            "AWS_SECRET_ACCESS_KEY":"${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-            "AWS_REGION":"${{ env.AWS_REGION }}"
-          }' \
-          --region ${{ env.AWS_REGION }}
-
-
-    - name: Notify deployment status
-      run: |
-        echo "✅ DynamoDB MCP Server deployed successfully!"
+        echo "✅ DynamoDB MCP Server Docker image built successfully!"
         echo ""
-        echo "🏗️ MCP Architecture:"
-        echo "- DynamoDB MCP Server (Database operations)"
+        echo "🏗️ Image Details:"
+        echo "- Repository: ${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp"
+        echo "- Tags: ${{ github.sha }}, latest"
         echo ""
-        echo "🔗 Function URL: Check AWS Lambda console for the DynamoDB MCP server URL"
+        echo "📦 Image is ready for external deployment!"
+        echo "🔗 ECR Registry: ${{ env.ECR_REGISTRY }}"
+        echo "📋 Repository: knowledgebot-dynamodb-mcp"
+        echo ""
+        echo "💡 To pull the image:"
+        echo "docker pull ${{ env.ECR_REGISTRY }}/knowledgebot-dynamodb-mcp:latest"
