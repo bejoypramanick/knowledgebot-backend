@@ -39,23 +39,15 @@ jobs:
       id: ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Create ECR repositories
+    - name: Create ECR repository for DynamoDB MCP
       run: |
-        # Create ECR repositories for MCP servers only
-        aws ecr create-repository --repository-name knowledgebot-docling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
-        aws ecr create-repository --repository-name knowledgebot-pinecone-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
+        # Create ECR repository for DynamoDB MCP server only
         aws ecr create-repository --repository-name knowledgebot-dynamodb-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
-        aws ecr create-repository --repository-name knowledgebot-neo4j-cypher-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
-        aws ecr create-repository --repository-name knowledgebot-neo4j-modeling-mcp --region ${{ env.AWS_REGION }} || echo "Repository already exists"
         
         # Set lifecycle policy to keep only latest 10 images
-        aws ecr put-lifecycle-policy --repository-name knowledgebot-docling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
-        aws ecr put-lifecycle-policy --repository-name knowledgebot-pinecone-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
-        aws ecr put-lifecycle-policy --repository-name knowledgebot-dynamodb-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
-        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-cypher-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
-        aws ecr put-lifecycle-policy --repository-name knowledgebot-neo4j-modeling-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
+        aws ecr put-lifecycle-policy --repository-name knowledgebot-dynamodb-mcp --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 2 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":2},"action":{"type":"expire"}}]}' --region ${{ env.AWS_REGION }} || echo "Lifecycle policy already set"
 
-  # Parallel Docker builds - 5 jobs running simultaneously
+  # DynamoDB Docker build only - other builds temporarily disabled
   build-mcp-servers:
     runs-on: ubuntu-latest
     needs: setup
@@ -64,21 +56,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: docling
-            dockerfile: Dockerfile.docling-library
-            repository: knowledgebot-docling-mcp
-          - name: pinecone
-            dockerfile: Dockerfile.pinecone-mcp
-            repository: knowledgebot-pinecone-mcp
           - name: dynamodb
             dockerfile: Dockerfile.dynamodb-mcp
             repository: knowledgebot-dynamodb-mcp
-          - name: neo4j-cypher
-            dockerfile: Dockerfile.neo4j-cypher-mcp
-            repository: knowledgebot-neo4j-cypher-mcp
-          - name: neo4j-modeling
-            dockerfile: Dockerfile.neo4j-data-modeling-mcp
-            repository: knowledgebot-neo4j-modeling-mcp
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -149,37 +129,7 @@ jobs:
           --role-name mcp-lambda-execution-role \
           --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole || echo "Policy already attached"
 
-    # Deploy all MCP server Lambda functions in parallel
-    - name: Deploy Docling MCP server Lambda function
-      run: |
-        aws lambda update-function-code \
-          --function-name docling-mcp-server \
-          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-docling-mcp:${{ github.sha }} \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name docling-mcp-server \
-          --package-type Image \
-          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-docling-mcp:${{ github.sha }} \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --timeout 900 \
-          --memory-size 2048 \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Deploy Pinecone MCP server Lambda function
-      run: |
-        aws lambda update-function-code \
-          --function-name pinecone-mcp-server \
-          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-pinecone-mcp:${{ github.sha }} \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name pinecone-mcp-server \
-          --package-type Image \
-          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-pinecone-mcp:${{ github.sha }} \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --timeout 900 \
-          --memory-size 1024 \
-          --region ${{ env.AWS_REGION }}
-
+    # Deploy DynamoDB MCP server Lambda function only
     - name: Deploy DynamoDB MCP server Lambda function
       run: |
         aws lambda update-function-code \
@@ -195,68 +145,16 @@ jobs:
           --memory-size 1024 \
           --region ${{ env.AWS_REGION }}
 
-    - name: Deploy Neo4j Cypher MCP server Lambda function
+    # Configure DynamoDB MCP server
+    - name: Create Function URL for DynamoDB MCP server
       run: |
-        aws lambda update-function-code \
-          --function-name neo4j-cypher-mcp-server \
-          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-cypher-mcp:${{ github.sha }} \
+        aws lambda create-function-url-config \
+          --function-name dynamodb-mcp-server \
+          --auth-type NONE \
           --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name neo4j-cypher-mcp-server \
-          --package-type Image \
-          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-cypher-mcp:${{ github.sha }} \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --timeout 900 \
-          --memory-size 1024 \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Deploy Neo4j Data Modeling MCP server Lambda function
-      run: |
-        aws lambda update-function-code \
-          --function-name neo4j-modeling-mcp-server \
-          --image-uri ${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-modeling-mcp:${{ github.sha }} \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name neo4j-modeling-mcp-server \
-          --package-type Image \
-          --code ImageUri=${{ env.ECR_REGISTRY }}/knowledgebot-neo4j-modeling-mcp:${{ github.sha }} \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --timeout 900 \
-          --memory-size 1024 \
-          --region ${{ env.AWS_REGION }}
-
-    # Configure all MCP servers in parallel
-    - name: Create Function URLs for all MCP servers
-      run: |
-        for function_name in docling-mcp-server pinecone-mcp-server dynamodb-mcp-server neo4j-cypher-mcp-server neo4j-modeling-mcp-server; do
-          aws lambda create-function-url-config \
-            --function-name $function_name \
-            --auth-type NONE \
-            --region ${{ env.AWS_REGION }} || \
-          aws lambda update-function-url-config \
-            --function-name $function_name \
-            --auth-type NONE \
-            --region ${{ env.AWS_REGION }}
-        done
-
-    - name: Update Docling MCP server environment variables
-      run: |
-        aws lambda update-function-configuration \
-          --function-name docling-mcp-server \
-          --environment Variables='{
-            "AWS_REGION":"${{ env.AWS_REGION }}"
-          }' \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Update Pinecone MCP server environment variables
-      run: |
-        aws lambda update-function-configuration \
-          --function-name pinecone-mcp-server \
-          --environment Variables='{
-            "PINECONE_API_KEY":"${{ secrets.PINECONE_API_KEY }}",
-            "PINECONE_ENVIRONMENT":"${{ secrets.PINECONE_ENVIRONMENT }}",
-            "AWS_REGION":"${{ env.AWS_REGION }}"
-          }' \
+        aws lambda update-function-url-config \
+          --function-name dynamodb-mcp-server \
+          --auth-type NONE \
           --region ${{ env.AWS_REGION }}
 
     - name: Update DynamoDB MCP server environment variables
@@ -270,176 +168,12 @@ jobs:
           }' \
           --region ${{ env.AWS_REGION }}
 
-    - name: Update Neo4j Cypher MCP server environment variables
-      run: |
-        aws lambda update-function-configuration \
-          --function-name neo4j-cypher-mcp-server \
-          --environment Variables='{
-            "NEO4J_URI":"${{ secrets.NEO4J_URI }}",
-            "NEO4J_USERNAME":"${{ secrets.NEO4J_USERNAME }}",
-            "NEO4J_PASSWORD":"${{ secrets.NEO4J_PASSWORD }}",
-            "NEO4J_DATABASE":"${{ secrets.NEO4J_DATABASE }}",
-            "AWS_REGION":"${{ env.AWS_REGION }}"
-          }' \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Update Neo4j Data Modeling MCP server environment variables
-      run: |
-        aws lambda update-function-configuration \
-          --function-name neo4j-modeling-mcp-server \
-          --environment Variables='{
-            "NEO4J_URI":"${{ secrets.NEO4J_URI }}",
-            "NEO4J_USERNAME":"${{ secrets.NEO4J_USERNAME }}",
-            "NEO4J_PASSWORD":"${{ secrets.NEO4J_PASSWORD }}",
-            "NEO4J_DATABASE":"${{ secrets.NEO4J_DATABASE }}",
-            "AWS_REGION":"${{ env.AWS_REGION }}"
-          }' \
-          --region ${{ env.AWS_REGION }}
-
-    # Deploy Zip Lambda functions (Business Logic)
-    - name: Deploy document-processor-business-logic Lambda function
-      run: |
-        # Create deployment package
-        zip -r document-processor-business-logic.zip microservices/document-processor-business-logic.py microservices/mcp-client.py microservices/error-logger-handler.py microservices/error-query-handler.py
-        
-        # Deploy or update Lambda function
-        aws lambda update-function-code \
-          --function-name document-processor-business-logic \
-          --zip-file fileb://document-processor-business-logic.zip \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name document-processor-business-logic \
-          --runtime python3.9 \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --handler document-processor-business-logic.lambda_handler \
-          --zip-file fileb://document-processor-business-logic.zip \
-          --timeout 900 \
-          --memory-size 1024 \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Deploy chat-orchestrator-business-logic Lambda function
-      run: |
-        # Create deployment package
-        zip -r chat-orchestrator-business-logic.zip microservices/chat-orchestrator-business-logic.py microservices/mcp-client.py microservices/error-logger-handler.py microservices/error-query-handler.py
-        
-        # Deploy or update Lambda function
-        aws lambda update-function-code \
-          --function-name chat-orchestrator-business-logic \
-          --zip-file fileb://chat-orchestrator-business-logic.zip \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name chat-orchestrator-business-logic \
-          --runtime python3.9 \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --handler chat-orchestrator-business-logic.lambda_handler \
-          --zip-file fileb://chat-orchestrator-business-logic.zip \
-          --timeout 300 \
-          --memory-size 512 \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Deploy s3-unified-handler Lambda function
-      run: |
-        # Create deployment package
-        zip -r s3-unified-handler.zip microservices/s3-unified-handler.py microservices/error-logger-handler.py microservices/error-query-handler.py
-        
-        # Deploy or update Lambda function
-        aws lambda update-function-code \
-          --function-name s3-unified-handler \
-          --zip-file fileb://s3-unified-handler.zip \
-          --region ${{ env.AWS_REGION }} || \
-        aws lambda create-function \
-          --function-name s3-unified-handler \
-          --runtime python3.9 \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/mcp-lambda-execution-role \
-          --handler s3-unified-handler.lambda_handler \
-          --zip-file fileb://s3-unified-handler.zip \
-          --timeout 300 \
-          --memory-size 256 \
-          --region ${{ env.AWS_REGION }}
-
-    # Clean up redundant AWS resources in parallel
-    - name: Delete redundant Lambda functions
-      run: |
-        REDUNDANT_FUNCTIONS=(
-          "openai-agents-handler"
-          "dynamodb-mcp-handler"
-          "chat-orchestrator-websocket"
-          "error-logger-handler"
-          "error-query-handler"
-          "docling-library-handler"
-          "pinecone-library-handler"
-          "neo4j-library-handler"
-          "dynamodb-crud-handler"
-          "neo4j-mcp-server"
-        )
-        
-        for function_name in "${REDUNDANT_FUNCTIONS[@]}"; do
-          echo "Deleting Lambda function: $function_name"
-          aws lambda delete-function \
-            --function-name $function_name \
-            --region ${{ env.AWS_REGION }} || echo "Function $function_name not found or already deleted"
-        done
-
-    - name: Delete redundant DynamoDB tables
-      run: |
-        REDUNDANT_TABLES=(
-          "document-chunks-staging"
-          "document-chunks-production"
-          "knowledgebot-error-logs-staging"
-          "knowledgebot-error-logs-production"
-        )
-        
-        for table_name in "${REDUNDANT_TABLES[@]}"; do
-          echo "Deleting DynamoDB table: $table_name"
-          aws dynamodb delete-table \
-            --table-name $table_name \
-            --region ${{ env.AWS_REGION }} || echo "Table $table_name not found or already deleted"
-        done
-
-    - name: Delete redundant S3 buckets
-      run: |
-        REDUNDANT_BUCKETS=(
-          "knowledgebot-documents-staging"
-          "knowledgebot-documents-production"
-          "processed-documents-staging"
-          "processed-documents-production"
-          "knowledgebot-error-logs-staging"
-          "knowledgebot-error-logs-production"
-        )
-        
-        for bucket_name in "${REDUNDANT_BUCKETS[@]}"; do
-          echo "Deleting S3 bucket: $bucket_name"
-          aws s3 rm s3://$bucket_name --recursive || echo "Bucket $bucket_name is empty or doesn't exist"
-          aws s3 rb s3://$bucket_name --region ${{ env.AWS_REGION }} || echo "Bucket $bucket_name not found or already deleted"
-        done
-
-    - name: Delete redundant IAM roles
-      run: |
-        REDUNDANT_ROLES=(
-          "lambda-execution-role"
-        )
-        
-        for role_name in "${REDUNDANT_ROLES[@]}"; do
-          echo "Deleting IAM role: $role_name"
-          aws iam list-attached-role-policies --role-name $role_name --query 'AttachedPolicies[].PolicyArn' --output text | \
-          xargs -I {} aws iam detach-role-policy --role-name $role_name --policy-arn {} || echo "No policies attached to $role_name"
-          aws iam delete-role --role-name $role_name || echo "Role $role_name not found or already deleted"
-        done
 
     - name: Notify deployment status
       run: |
-        echo "✅ KnowledgeBot Backend deployed successfully!"
+        echo "✅ DynamoDB MCP Server deployed successfully!"
         echo ""
         echo "🏗️ MCP Architecture:"
-        echo "- Docling MCP Server (Document processing)"
-        echo "- Pinecone MCP Server (Vector operations)" 
         echo "- DynamoDB MCP Server (Database operations)"
-        echo "- Neo4j Cypher MCP Server (Graph queries)"
-        echo "- Neo4j Data Modeling MCP Server (Graph modeling)"
         echo ""
-        echo "📦 Business Logic Functions:"
-        echo "- document-processor-business-logic (Document pipeline)"
-        echo "- chat-orchestrator-business-logic (Chat orchestration)"
-        echo "- s3-unified-handler (S3 operations)"
-        echo ""
-        echo "🧹 Cleanup completed - All redundant AWS resources removed."
+        echo "🔗 Function URL: Check AWS Lambda console for the DynamoDB MCP server URL"
